@@ -41,7 +41,7 @@
 
 Знания не живут в промптах. Промпт задаёт роль, тон и сценарий; факты приходят из базы знаний с версией и датой актуальности. Нет записи — нет ответа, идёт эскалация.
 
-**Артефакт:** `docs/pitch/avtograd-assistants.html` · [опубликовано](https://claude.ai/code/artifact/cd9487da-f954-4088-827e-eeaf87ee6de8)
+**Артефакт:** [docs/pitch/avtograd-assistants.html](docs/pitch/avtograd-assistants.html)
 
 ---
 
@@ -187,7 +187,7 @@ RAG по базе знаний                     follow-up молчащим л
 
 LLM-агент в n8n на клиентском пути · история диалогов в execution log · Google Sheets или Google Calendar как хранилище ПДн · Qdrant отдельным сервисом на старте · один омниканальный провайдер без резервного канала · Cloudflare перед трафиком с ПДн.
 
-**Артефакт:** `docs/architecture/avtograd-architecture.html` · [опубликовано](https://claude.ai/code/artifact/872fb966-f99f-45e7-9892-2c058064d320)
+**Артефакт:** [docs/architecture/avtograd-architecture.html](docs/architecture/avtograd-architecture.html)
 
 ---
 
@@ -340,7 +340,7 @@ LLM-агент в n8n на клиентском пути · история ди�
 
 Результат, пригодный к сдаче, существует с двенадцатого рабочего дня. Каждый следующий этап добавляет доказательство, но не ставит под угрозу уже готовое.
 
-**Артефакт:** `docs/plan/avtograd-plan.html`
+**Артефакт:** [docs/plan/avtograd-plan.html](docs/plan/avtograd-plan.html)
 
 ---
 
@@ -368,4 +368,4 @@ LLM-агент в n8n на клиентском пути · история ди�
 
 Этап 0 закрыт: 40 автомобилей, 10 клиентов с историей обслуживания, 12 заказ-нарядов, 6 вакансий с профилями, 20 кандидатов, часы работы отделов и график дежурств. Факты для этапа 1 берутся только отсюда.
 
-**Артефакт:** `docs/knowledge-base/fixtures/`, `docs/knowledge-base/README.md`
+**Артефакт:** [docs/knowledge-base/](docs/knowledge-base/) — фикстуры и описание состава
