@@ -1,0 +1,129 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "updated_at": "2026-09-11",
+    "note": "Автомобили клиентов в обслуживании — не путать со стоком"
+  },
+  "vehicles": [
+    {
+      "id": "veh-01",
+      "customer_id": "cus-01",
+      "vin": "TESTAG00000000901",
+      "make": "Aurora",
+      "model": "X5",
+      "year": 2024,
+      "purchased_at": "2024-03-12",
+      "mileage_km": 41200,
+      "plate": "А001АА777",
+      "scenario_role": "ТО-3 подходит по пробегу — базовый сценарий записи"
+    },
+    {
+      "id": "veh-02",
+      "customer_id": "cus-02",
+      "vin": "TESTAG00000000902",
+      "make": "Vega",
+      "model": "Cross",
+      "year": 2025,
+      "purchased_at": "2025-04-20",
+      "mileage_km": 18900,
+      "plate": "В002ВВ777",
+      "scenario_role": "ТО-1 пройдено, ТО-2 приближается"
+    },
+    {
+      "id": "veh-03",
+      "customer_id": "cus-03",
+      "vin": "TESTAG00000000903",
+      "make": "Aurora",
+      "model": "X3",
+      "year": 2023,
+      "purchased_at": "2023-06-05",
+      "mileage_km": 52300,
+      "plate": "С003СС777",
+      "scenario_role": "ТО-3 пропущено, клиент заявляет обслуживание в стороннем сервисе"
+    },
+    {
+      "id": "veh-04",
+      "customer_id": "cus-04",
+      "vin": "TESTAG00000000904",
+      "make": "Vega",
+      "model": "Sedan",
+      "year": 2019,
+      "purchased_at": "2019-09-14",
+      "mileage_km": 168000,
+      "plate": "Е004ЕЕ777",
+      "scenario_role": "гарантия истекла по сроку и пробегу"
+    },
+    {
+      "id": "veh-05",
+      "customer_id": "cus-05",
+      "vin": "TESTAG00000000905",
+      "make": "Aurora",
+      "model": "S7",
+      "year": 2025,
+      "purchased_at": "2025-02-11",
+      "mileage_km": 12400,
+      "plate": "К005КК777",
+      "scenario_role": "три обращения по одному стуку — конфликтный сценарий"
+    },
+    {
+      "id": "veh-06",
+      "customer_id": "cus-06",
+      "vin": "TESTAG00000000906",
+      "make": "Vega",
+      "model": "Sport",
+      "year": 2024,
+      "purchased_at": "2024-11-30",
+      "mileage_km": 33000,
+      "plate": "М006ММ777",
+      "scenario_role": "гарантия активна, плановое обслуживание"
+    },
+    {
+      "id": "veh-07",
+      "customer_id": "cus-07",
+      "vin": "TESTAG00000000907",
+      "make": "Vector",
+      "model": "Sedan",
+      "year": 2021,
+      "purchased_at": "2021-07-19",
+      "mileage_km": 96500,
+      "plate": "Н007НН777",
+      "scenario_role": "непредставленная марка, обслуживается платно"
+    },
+    {
+      "id": "veh-08",
+      "customer_id": "cus-08",
+      "vin": "TESTAG00000000908",
+      "make": "Aurora",
+      "model": "X5",
+      "year": 2026,
+      "purchased_at": "2026-06-02",
+      "mileage_km": 4800,
+      "plate": "О008ОО777",
+      "scenario_role": "новая машина, первое ТО впереди"
+    },
+    {
+      "id": "veh-09",
+      "customer_id": "cus-09",
+      "vin": "TESTAG00000000909",
+      "make": "Vega",
+      "model": "Cross",
+      "year": 2022,
+      "purchased_at": "2022-08-08",
+      "mileage_km": 87000,
+      "plate": "Р009РР777",
+      "scenario_role": "гарантия истекла по сроку в августе 2025"
+    },
+    {
+      "id": "veh-10",
+      "customer_id": "cus-10",
+      "vin": "TESTAG00000000910",
+      "make": "Aurora",
+      "model": "X3",
+      "year": 2026,
+      "purchased_at": "2026-01-22",
+      "mileage_km": 8200,
+      "plate": "Т010ТТ777",
+      "scenario_role": "сейчас в ремонте — сценарий «что с моей машиной»"
+    }
+  ]
+}

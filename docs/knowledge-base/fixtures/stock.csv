@@ -1,0 +1,41 @@
+﻿vin;dealer_id;condition;make;model;trim;year;mileage_km;color;price_rub;status;owners;accident_history;location;arrived_at;reserved_until;ready_at;eta;sold_at;photos
+TESTAG00000000001;dc-north;new;Aurora;X3;Base;2026;12;белый;2490000;in_stock;0;нет;площадка;2026-08-11;;;;;14
+TESTAG00000000002;dc-north;new;Aurora;X3;Base;2026;12;серый;2490000;in_stock;0;нет;площадка;2026-08-12;;;;;14
+TESTAG00000000003;dc-north;new;Aurora;X3;Base;2026;12;чёрный;2490000;in_stock;0;нет;площадка;2026-08-13;;;;;14
+TESTAG00000000004;dc-north;new;Aurora;X3;Comfort;2026;12;серый;2790000;in_stock;0;нет;площадка;2026-08-14;;;;;14
+TESTAG00000000005;dc-north;new;Aurora;X3;Comfort;2026;12;чёрный;2790000;in_stock;0;нет;площадка;2026-08-15;;;;;14
+TESTAG00000000006;dc-north;new;Aurora;X3;Style;2026;12;синий;2990000;in_transit;0;нет;в пути;2026-08-16;;;2026-09-25;;14
+TESTAG00000000007;dc-north;new;Aurora;X5;Comfort;2026;12;белый;2890000;in_stock;0;нет;площадка;2026-08-17;;;;;14
+TESTAG00000000008;dc-north;new;Aurora;X5;Comfort;2026;12;серый;2890000;in_stock;0;нет;площадка;2026-08-18;;;;;14
+TESTAG00000000009;dc-north;new;Aurora;X5;Style;2026;12;чёрный;3290000;in_stock;0;нет;площадка;2026-08-19;;;;;14
+TESTAG00000000010;dc-north;new;Aurora;X5;Style;2026;12;синий;3290000;in_stock;0;нет;площадка;2026-08-20;;;;;14
+TESTAG00000000011;dc-north;new;Aurora;X5;Prestige;2026;12;серебристый;3690000;reserved;0;нет;площадка;2026-08-21;2026-09-14;;;;14
+TESTAG00000000012;dc-north;new;Aurora;S7;Style;2026;12;чёрный;3990000;in_stock;0;нет;площадка;2026-08-22;;;;;14
+TESTAG00000000013;dc-north;new;Aurora;S7;Prestige;2026;12;белый;4890000;prep;0;нет;предпродажка;2026-08-23;;2026-09-13;;;14
+TESTAG00000000014;dc-west;new;Vega;Sedan;Base;2026;12;белый;1790000;in_stock;0;нет;площадка;2026-08-24;;;;;14
+TESTAG00000000015;dc-west;new;Vega;Sedan;Base;2026;12;серый;1790000;in_stock;0;нет;площадка;2026-08-25;;;;;14
+TESTAG00000000016;dc-west;new;Vega;Sedan;Base;2026;12;чёрный;1790000;in_stock;0;нет;площадка;2026-08-26;;;;;14
+TESTAG00000000017;dc-west;new;Vega;Sedan;Comfort;2026;12;серый;1990000;in_stock;0;нет;площадка;2026-08-27;;;;;14
+TESTAG00000000018;dc-west;new;Vega;Sedan;Comfort;2026;12;чёрный;1990000;in_stock;0;нет;площадка;2026-08-10;;;;;14
+TESTAG00000000019;dc-west;new;Vega;Cross;Comfort;2026;12;синий;2190000;in_stock;0;нет;площадка;2026-08-11;;;;;14
+TESTAG00000000020;dc-west;new;Vega;Cross;Comfort;2026;12;серебристый;2190000;in_stock;0;нет;площадка;2026-08-12;;;;;14
+TESTAG00000000021;dc-west;new;Vega;Cross;Style;2026;12;серый;2490000;in_stock;0;нет;площадка;2026-08-13;;;;;14
+TESTAG00000000022;dc-west;new;Vega;Cross;Style;2026;12;чёрный;2490000;in_stock;0;нет;площадка;2026-08-14;;;;;14
+TESTAG00000000023;dc-west;new;Vega;Sport;Style;2026;12;красный;2890000;in_stock;0;нет;площадка;2026-08-15;;;;;14
+TESTAG00000000024;dc-west;used;Vector;Sedan;;2022;61400;серебристый;1340000;reserved;1;нет;площадка;2026-08-09;2026-09-14;;;;22
+TESTAG00000000025;dc-west;used;Vector;Hatch;;2019;112000;синий;890000;in_stock;2;перекрас 1 элемента;площадка;2026-08-10;;;;;22
+TESTAG00000000026;dc-west;used;Vector;Sedan;;2018;148500;чёрный;720000;in_stock;3;перекрас 3 элементов;площадка;2026-08-11;;;;;22
+TESTAG00000000027;dc-west;used;Vega;Sedan;Comfort;2021;78300;белый;1390000;in_stock;1;нет;площадка;2026-08-12;;;;;22
+TESTAG00000000028;dc-west;used;Vega;Cross;Comfort;2020;95700;серый;1690000;in_stock;2;перекрас 2 элементов;площадка;2026-08-13;;;;;22
+TESTAG00000000029;dc-west;used;Aurora;X3;Comfort;2021;64200;белый;2090000;in_stock;1;нет;площадка;2026-08-14;;;;;22
+TESTAG00000000030;dc-west;used;Aurora;X5;Style;2019;121400;чёрный;2190000;in_stock;2;нет;площадка;2026-08-15;;;;;22
+TESTAG00000000031;dc-west;used;Vector;Van;;2020;187000;белый;1090000;in_stock;2;ремонт после ДТП;площадка;2026-08-16;;;;;22
+TESTAG00000000032;dc-west;used;Vega;Sport;Style;2022;44800;красный;2390000;in_stock;1;нет;площадка;2026-08-17;;;;;22
+TESTAG00000000033;dc-west;used;Aurora;S7;Style;2020;88600;серый;2590000;sold;2;нет;площадка;2026-08-18;;;;2026-09-10;22
+TESTAG00000000034;dc-west;used;Vega;Sedan;Base;2019;134000;серебристый;890000;in_stock;3;перекрас 2 элементов;площадка;2026-08-19;;;;;22
+TESTAG00000000035;dc-west;used;Aurora;X3;Style;2023;38900;синий;2390000;in_stock;1;нет;площадка;2026-08-20;;;;;22
+TESTAG00000000036;dc-west;used;Vector;Sedan;;2021;83200;серый;1190000;in_stock;2;нет;площадка;2026-08-21;;;;;22
+TESTAG00000000037;dc-west;used;Vega;Cross;Style;2023;29400;белый;2090000;prep;1;нет;предпродажка;2026-08-22;;2026-09-12;;;22
+TESTAG00000000038;dc-west;used;Aurora;X5;Comfort;2022;57600;белый;2690000;in_stock;1;нет;площадка;2026-08-23;;;;;22
+TESTAG00000000039;dc-west;used;Vega;Sedan;Comfort;2022;51300;чёрный;1490000;in_stock;1;нет;площадка;2026-08-24;;;;;22
+TESTAG00000000040;dc-west;used;Vector;Hatch;;2023;26700;красный;1190000;in_stock;1;нет;площадка;2026-08-05;;;;;22

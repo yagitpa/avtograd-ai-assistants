@@ -1,0 +1,117 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "updated_at": "2026-09-11"
+  },
+  "models": [
+    {
+      "make": "Aurora",
+      "model": "X3",
+      "body": "кроссовер",
+      "engine": "1.6 турбо, 150 л.с.",
+      "transmission": "АКПП",
+      "drive": "передний",
+      "segment": "компактный кроссовер",
+      "trims": {
+        "Base": 2490000,
+        "Comfort": 2790000,
+        "Style": 2990000
+      }
+    },
+    {
+      "make": "Aurora",
+      "model": "X5",
+      "body": "кроссовер",
+      "engine": "2.0 турбо, 200 л.с.",
+      "transmission": "АКПП",
+      "drive": "полный",
+      "segment": "среднеразмерный кроссовер",
+      "trims": {
+        "Comfort": 2890000,
+        "Style": 3290000,
+        "Prestige": 3690000
+      }
+    },
+    {
+      "make": "Aurora",
+      "model": "S7",
+      "body": "седан",
+      "engine": "2.5, 249 л.с.",
+      "transmission": "АКПП",
+      "drive": "полный",
+      "segment": "бизнес-седан",
+      "trims": {
+        "Style": 3990000,
+        "Prestige": 4890000
+      }
+    },
+    {
+      "make": "Vega",
+      "model": "Sedan",
+      "body": "седан",
+      "engine": "1.6, 122 л.с.",
+      "transmission": "МКПП / АКПП",
+      "drive": "передний",
+      "segment": "массовый седан",
+      "trims": {
+        "Base": 1790000,
+        "Comfort": 1990000
+      }
+    },
+    {
+      "make": "Vega",
+      "model": "Cross",
+      "body": "кроссовер",
+      "engine": "2.0, 150 л.с.",
+      "transmission": "АКПП",
+      "drive": "передний",
+      "segment": "массовый кроссовер",
+      "trims": {
+        "Comfort": 2190000,
+        "Style": 2490000
+      }
+    },
+    {
+      "make": "Vega",
+      "model": "Sport",
+      "body": "кроссовер купе",
+      "engine": "2.0 турбо, 190 л.с.",
+      "transmission": "АКПП",
+      "drive": "полный",
+      "segment": "спортивный кроссовер",
+      "trims": {
+        "Style": 2890000
+      }
+    },
+    {
+      "make": "Vector",
+      "model": "Sedan",
+      "body": "седан",
+      "engine": "1.6, 113 л.с.",
+      "transmission": "МКПП",
+      "drive": "передний",
+      "segment": "только с пробегом",
+      "trims": {}
+    },
+    {
+      "make": "Vector",
+      "model": "Hatch",
+      "body": "хэтчбек",
+      "engine": "1.4, 99 л.с.",
+      "transmission": "МКПП",
+      "drive": "передний",
+      "segment": "только с пробегом",
+      "trims": {}
+    },
+    {
+      "make": "Vector",
+      "model": "Van",
+      "body": "фургон",
+      "engine": "2.2 дизель, 136 л.с.",
+      "transmission": "МКПП",
+      "drive": "задний",
+      "segment": "только с пробегом",
+      "trims": {}
+    }
+  ]
+}

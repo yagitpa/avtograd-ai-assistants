@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "generated_for": "ADR-0003",
+    "updated_at": "2026-09-11"
+  },
+  "company": {
+    "legal_name": "ООО «АвтоГрад» (тестовая организация)",
+    "brand": "АвтоГрад",
+    "official_brands": [
+      "Aurora",
+      "Vega"
+    ],
+    "used_cars_brands": "любые марки, включая непредставленные в ДЦ",
+    "timezone": "Europe/Moscow",
+    "site": "avtograd-demo.ru",
+    "common_phone": "+7 495 000-10-00",
+    "roadside_assistance": "8 800 000-00-11 (круглосуточно)"
+  },
+  "locations": [
+    {
+      "id": "dc-north",
+      "name": "ДЦ «АвтоГрад-Север»",
+      "address": "ул. Кузнецова, 14",
+      "phone": "+7 495 000-12-00",
+      "brands": [
+        "Aurora"
+      ],
+      "departments": [
+        "sales_new",
+        "service",
+        "parts",
+        "credit"
+      ],
+      "service_bays": 12,
+      "note": "Основной сервисный центр сети"
+    },
+    {
+      "id": "dc-west",
+      "name": "ДЦ «АвтоГрад-Запад»",
+      "address": "Варшавское шоссе, 71",
+      "phone": "+7 495 000-14-00",
+      "brands": [
+        "Vega"
+      ],
+      "departments": [
+        "sales_new",
+        "sales_used",
+        "credit",
+        "hr"
+      ],
+      "service_bays": 0,
+      "note": "Отдел автомобилей с пробегом и трейд-ин всей сети"
+    }
+  ],
+  "departments": {
+    "sales_new": "Отдел продаж новых автомобилей",
+    "sales_used": "Отдел автомобилей с пробегом и трейд-ин",
+    "service": "Сервис и постпродажное обслуживание",
+    "parts": "Склад запчастей",
+    "credit": "Отдел кредитования и страхования",
+    "hr": "Отдел персонала",
+    "quality": "Служба качества"
+  }
+}

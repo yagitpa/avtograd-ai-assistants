@@ -1,0 +1,146 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "updated_at": "2026-09-11",
+    "statuses": [
+      "scheduled",
+      "in_progress",
+      "waiting_parts",
+      "closed"
+    ]
+  },
+  "work_orders": [
+    {
+      "id": "wo-1001",
+      "vehicle_id": "veh-01",
+      "opened_at": "2025-09-18",
+      "status": "closed",
+      "type": "TO-2",
+      "works": "ТО-2 (30 000 км)",
+      "sum_rub": 17900,
+      "closed_or_planned": "2025-09-18",
+      "note": ""
+    },
+    {
+      "id": "wo-1002",
+      "vehicle_id": "veh-02",
+      "opened_at": "2026-02-14",
+      "status": "closed",
+      "type": "TO-1",
+      "works": "ТО-1 (15 000 км)",
+      "sum_rub": 11400,
+      "closed_or_planned": "2026-02-14",
+      "note": ""
+    },
+    {
+      "id": "wo-1003",
+      "vehicle_id": "veh-03",
+      "opened_at": "2024-08-03",
+      "status": "closed",
+      "type": "TO-2",
+      "works": "ТО-2 (30 000 км)",
+      "sum_rub": 17900,
+      "closed_or_planned": "2024-08-03",
+      "note": "последнее обращение в ДЦ"
+    },
+    {
+      "id": "wo-1004",
+      "vehicle_id": "veh-04",
+      "opened_at": "2024-05-21",
+      "status": "closed",
+      "type": "repair",
+      "works": "замена тормозных дисков",
+      "sum_rub": 24600,
+      "closed_or_planned": "2024-05-22",
+      "note": "гарантия уже истекла, работы платные"
+    },
+    {
+      "id": "wo-1005",
+      "vehicle_id": "veh-05",
+      "opened_at": "2026-06-09",
+      "status": "closed",
+      "type": "warranty",
+      "works": "диагностика стука подвески",
+      "sum_rub": 0,
+      "closed_or_planned": "2026-06-10",
+      "note": "обращение 1 из 3, дефект не выявлен"
+    },
+    {
+      "id": "wo-1006",
+      "vehicle_id": "veh-05",
+      "opened_at": "2026-07-21",
+      "status": "closed",
+      "type": "warranty",
+      "works": "замена стойки стабилизатора",
+      "sum_rub": 0,
+      "closed_or_planned": "2026-07-23",
+      "note": "обращение 2 из 3"
+    },
+    {
+      "id": "wo-1007",
+      "vehicle_id": "veh-05",
+      "opened_at": "2026-09-01",
+      "status": "waiting_parts",
+      "type": "warranty",
+      "works": "повторная диагностика, заказ рычага",
+      "sum_rub": 0,
+      "closed_or_planned": "2026-09-16",
+      "note": "обращение 3 из 3, простой 11 дней — красный приоритет"
+    },
+    {
+      "id": "wo-1008",
+      "vehicle_id": "veh-06",
+      "opened_at": "2026-03-12",
+      "status": "closed",
+      "type": "TO-1",
+      "works": "ТО-1 (15 000 км)",
+      "sum_rub": 11400,
+      "closed_or_planned": "2026-03-12",
+      "note": ""
+    },
+    {
+      "id": "wo-1009",
+      "vehicle_id": "veh-07",
+      "opened_at": "2026-04-05",
+      "status": "closed",
+      "type": "repair",
+      "works": "замена сцепления",
+      "sum_rub": 68400,
+      "closed_or_planned": "2026-04-08",
+      "note": "непредставленная марка, платный ремонт"
+    },
+    {
+      "id": "wo-1010",
+      "vehicle_id": "veh-09",
+      "opened_at": "2025-10-02",
+      "status": "closed",
+      "type": "TO-4",
+      "works": "ТО-4 (60 000 км)",
+      "sum_rub": 29900,
+      "closed_or_planned": "2025-10-02",
+      "note": ""
+    },
+    {
+      "id": "wo-1011",
+      "vehicle_id": "veh-10",
+      "opened_at": "2026-09-09",
+      "status": "in_progress",
+      "type": "repair",
+      "works": "замена переднего бампера после ДТП",
+      "sum_rub": 112000,
+      "closed_or_planned": "2026-09-12",
+      "note": "страховой случай, не гарантия"
+    },
+    {
+      "id": "wo-1012",
+      "vehicle_id": "veh-01",
+      "opened_at": "2026-09-11",
+      "status": "scheduled",
+      "type": "TO-3",
+      "works": "ТО-3 (45 000 км)",
+      "sum_rub": 23500,
+      "closed_or_planned": "2026-09-16",
+      "note": "запись создана ассистентом — демонстрационный сценарий"
+    }
+  ]
+}

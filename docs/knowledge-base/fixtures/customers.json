@@ -1,0 +1,89 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "pii_note": "Вымышленные клиенты. Телефоны в нероутируемом диапазоне.",
+    "updated_at": "2026-09-11"
+  },
+  "customers": [
+    {
+      "id": "cus-01",
+      "name": "Николай Гордеев",
+      "phone": "+7 900 000-21-01",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-02",
+      "name": "Елена Сафронова",
+      "phone": "+7 900 000-21-02",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-03",
+      "name": "Игорь Демидов",
+      "phone": "+7 900 000-21-03",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-04",
+      "name": "Алина Бирюкова",
+      "phone": "+7 900 000-21-04",
+      "home_location": "dc-west",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-05",
+      "name": "Пётр Ремезов",
+      "phone": "+7 900 000-21-05",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-06",
+      "name": "Юлия Карпова",
+      "phone": "+7 900 000-21-06",
+      "home_location": "dc-west",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-07",
+      "name": "Роман Щукин",
+      "phone": "+7 900 000-21-07",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-08",
+      "name": "Светлана Ивлева",
+      "phone": "+7 900 000-21-08",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-09",
+      "name": "Денис Аверин",
+      "phone": "+7 900 000-21-09",
+      "home_location": "dc-west",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    },
+    {
+      "id": "cus-10",
+      "name": "Марина Осипова",
+      "phone": "+7 900 000-21-10",
+      "home_location": "dc-north",
+      "consent_at": "2026-01-15",
+      "consent_version": "v1.2"
+    }
+  ]
+}

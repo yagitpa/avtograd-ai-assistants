@@ -1,0 +1,56 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "owner": "emp-03",
+    "updated_at": "2026-09-11",
+    "rule": "Акция с истёкшей датой не предлагается ни при каких условиях"
+  },
+  "promotions": [
+    {
+      "id": "ACT-114",
+      "name": "Трейд-ин Осень",
+      "from": "2026-09-01",
+      "to": "2026-10-31",
+      "benefit_rub": 120000,
+      "applies_to": [
+        "Vega Cross",
+        "Vega Sedan"
+      ],
+      "conditions": "сдаваемый автомобиль не старше 10 лет",
+      "not_combinable_with": [
+        "ACT-109"
+      ],
+      "status": "active"
+    },
+    {
+      "id": "ACT-109",
+      "name": "Кредитная ставка 0,1%",
+      "from": "2026-08-01",
+      "to": "2026-09-30",
+      "benefit_rub": null,
+      "applies_to": [
+        "Aurora X3",
+        "Aurora X5"
+      ],
+      "conditions": "первоначальный взнос от 40%, срок до 36 месяцев",
+      "not_combinable_with": [
+        "ACT-114"
+      ],
+      "status": "active"
+    },
+    {
+      "id": "ACT-102",
+      "name": "Летний сервисный пакет",
+      "from": "2026-06-01",
+      "to": "2026-08-31",
+      "benefit_rub": 15000,
+      "applies_to": [
+        "сервис"
+      ],
+      "conditions": "при прохождении ТО в период акции",
+      "not_combinable_with": [],
+      "status": "expired",
+      "note": "Оставлена намеренно: проверка правила про недействующие акции"
+    }
+  ]
+}

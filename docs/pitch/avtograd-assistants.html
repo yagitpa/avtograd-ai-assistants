@@ -1,0 +1,535 @@
+<title>Три ассистента АвтоГрада</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@400;600&display=swap">
+<style>
+  :root{
+    --paper:#F1F2EE;
+    --surface:#FAFBF8;
+    --ink:#14181A;
+    --ink-2:#454D4E;
+    --ink-3:#6E7674;
+    --rule:#D6D9D2;
+    --rule-soft:#E4E7E0;
+    --petrol:#0E5257;
+    --petrol-soft:#DCE7E5;
+    --amber:#A9650F;
+    --amber-soft:#F0E3CE;
+    --critical:#9A3626;
+    --shadow:0 1px 0 rgba(20,24,26,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#101413;
+      --surface:#171C1B;
+      --ink:#E9ECE6;
+      --ink-2:#B3BAB6;
+      --ink-3:#848D89;
+      --rule:#2A312F;
+      --rule-soft:#232928;
+      --petrol:#5FB8B4;
+      --petrol-soft:#16302F;
+      --amber:#D9A05A;
+      --amber-soft:#2C2519;
+      --critical:#D97D68;
+      --shadow:0 1px 0 rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#101413;
+    --surface:#171C1B;
+    --ink:#E9ECE6;
+    --ink-2:#B3BAB6;
+    --ink-3:#848D89;
+    --rule:#2A312F;
+    --rule-soft:#232928;
+    --petrol:#5FB8B4;
+    --petrol-soft:#16302F;
+    --amber:#D9A05A;
+    --amber-soft:#2C2519;
+    --critical:#D97D68;
+    --shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Golos Text","Segoe UI",system-ui,sans-serif;
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1180px;margin:0 auto;padding:0 24px 96px}
+
+  /* ---------- header ---------- */
+  .masthead{padding:56px 0 36px;border-bottom:1px solid var(--rule)}
+  .eyebrow{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-3);margin:0 0 22px;
+  }
+  h1{
+    font-family:"Unbounded","Golos Text",sans-serif;font-weight:600;
+    font-size:clamp(34px,5.4vw,60px);line-height:1.04;letter-spacing:-.02em;
+    margin:0 0 20px;text-wrap:balance;max-width:15ch;
+  }
+  .deck{font-size:clamp(17px,2vw,20px);line-height:1.5;color:var(--ink-2);max-width:62ch;margin:0}
+  .facts{display:flex;flex-wrap:wrap;gap:0;margin-top:36px;border-top:1px solid var(--rule-soft)}
+  .fact{flex:1 1 190px;padding:18px 22px 16px;border-right:1px solid var(--rule-soft)}
+  .fact:last-child{border-right:0}
+  .fact b{
+    display:block;font-family:"Unbounded",sans-serif;font-weight:400;
+    font-size:27px;line-height:1.1;color:var(--petrol);font-variant-numeric:tabular-nums;
+  }
+  .fact span{display:block;margin-top:7px;font-size:13.5px;color:var(--ink-3);line-height:1.4}
+
+  /* ---------- layout ---------- */
+  .body-grid{display:grid;grid-template-columns:1fr;gap:48px;padding-top:44px}
+  @media(min-width:1000px){.body-grid{grid-template-columns:212px minmax(0,1fr);gap:64px}}
+
+  nav.toc{align-self:start}
+  @media(min-width:1000px){nav.toc{position:sticky;top:28px}}
+  .toc-title{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-3);margin:0 0 14px;
+  }
+  .toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .toc a{
+    display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:baseline;
+    padding:5px 0;text-decoration:none;color:var(--ink-2);font-size:14px;line-height:1.35;
+    border-bottom:1px solid transparent;
+  }
+  .toc a em{font-family:"IBM Plex Mono",monospace;font-style:normal;font-size:11.5px;color:var(--ink-3)}
+  .toc a:hover{color:var(--petrol)}
+  .toc a.on{color:var(--ink);font-weight:600}
+  .toc a.on em{color:var(--petrol)}
+  .toc a:focus-visible{outline:2px solid var(--petrol);outline-offset:3px;border-radius:2px}
+
+  main{min-width:0;max-width:74ch}
+  section{padding-top:12px;margin-bottom:60px;scroll-margin-top:24px}
+  .sec-head{display:flex;gap:14px;align-items:baseline;margin-bottom:18px}
+  .sec-num{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--petrol);letter-spacing:.08em;padding-top:4px}
+  h2{
+    font-family:"Unbounded","Golos Text",sans-serif;font-weight:400;
+    font-size:clamp(22px,2.7vw,29px);line-height:1.18;letter-spacing:-.015em;
+    margin:0;text-wrap:balance;
+  }
+  h3{font-size:17px;font-weight:700;margin:30px 0 8px;letter-spacing:-.005em}
+  p{margin:0 0 15px;max-width:66ch}
+  main ul,main ol{margin:0 0 16px;padding-left:20px;max-width:66ch}
+  main li{margin-bottom:7px}
+  strong{font-weight:600}
+  .lede{font-size:17.5px;color:var(--ink-2);max-width:64ch}
+
+  /* ---------- loss nodes ---------- */
+  .nodes{display:flex;flex-direction:column;gap:0;margin:22px 0 8px;border-top:1px solid var(--rule)}
+  .node{display:grid;grid-template-columns:1fr;gap:4px;padding:18px 0;border-bottom:1px solid var(--rule)}
+  @media(min-width:620px){.node{grid-template-columns:1fr 172px;gap:24px;align-items:start}}
+  .node h4{margin:0 0 6px;font-size:16px;font-weight:700}
+  .node p{margin:0;font-size:14.5px;color:var(--ink-2)}
+  .node .sum{
+    font-family:"IBM Plex Mono",monospace;font-size:15px;color:var(--amber);
+    font-variant-numeric:tabular-nums;line-height:1.4;
+  }
+  @media(min-width:620px){.node .sum{text-align:right}}
+  .node .sum small{display:block;font-size:11.5px;color:var(--ink-3);letter-spacing:.04em;margin-top:3px}
+
+  /* ---------- assistant blocks ---------- */
+  .asst{border:1px solid var(--rule);background:var(--surface);padding:22px 22px 6px;margin:0 0 18px;box-shadow:var(--shadow)}
+  .asst-top{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  .asst h3{margin:0;font-family:"Unbounded",sans-serif;font-weight:400;font-size:19px;letter-spacing:-.01em}
+  .tag{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--petrol);background:var(--petrol-soft);padding:4px 9px;white-space:nowrap;
+  }
+  .role{font-size:14.5px;color:var(--ink-2);margin:6px 0 14px;max-width:62ch}
+  .asst dl{display:grid;grid-template-columns:1fr;gap:0;margin:0;border-top:1px solid var(--rule-soft)}
+  @media(min-width:600px){.asst dl{grid-template-columns:128px minmax(0,1fr)}}
+  .asst dt{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);padding:13px 0 2px;
+  }
+  @media(min-width:600px){.asst dt{padding:13px 0;border-top:1px solid var(--rule-soft)}}
+  .asst dd{margin:0;padding:0 0 13px;font-size:14.5px;color:var(--ink-2)}
+  @media(min-width:600px){.asst dd{padding:13px 0;border-top:1px solid var(--rule-soft)}}
+  .asst dd ul{margin:0;padding-left:17px}
+  .asst dd li{margin-bottom:5px}
+  .kpi{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;color:var(--ink);font-size:13.5px}
+  .kpi span{color:var(--amber)}
+
+  /* ---------- red lines ---------- */
+  .redline{border-left:3px solid var(--critical);padding:2px 0 2px 16px;margin:20px 0}
+  .redline ul{padding-left:17px;margin:8px 0 0}
+  .redline li{color:var(--ink-2);font-size:14.5px}
+  .redline p{margin:0;font-weight:600}
+
+  /* ---------- flow ---------- */
+  .flow{display:flex;flex-direction:column;gap:8px;margin:22px 0 10px}
+  .lane{border:1px solid var(--rule);background:var(--surface);padding:13px 16px}
+  .lane .lane-t{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);margin-bottom:5px;
+  }
+  .lane p{margin:0;font-size:14.5px;color:var(--ink-2)}
+  .lane.accent{border-color:var(--petrol);background:var(--petrol-soft)}
+  .lane.accent p{color:var(--ink)}
+  .arrow{font-family:"IBM Plex Mono",monospace;color:var(--ink-3);font-size:13px;text-align:center;line-height:1}
+
+  /* ---------- tables ---------- */
+  .tbl-wrap{overflow-x:auto;margin:20px 0 10px;border-top:1px solid var(--rule)}
+  table{border-collapse:collapse;width:100%;min-width:520px;font-size:14.5px}
+  th,td{text-align:left;padding:11px 14px 11px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  th{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:400;padding-top:12px;
+  }
+  td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink)}
+  tr.total td{border-bottom:0;border-top:1px solid var(--rule);font-weight:600;padding-top:13px}
+  tr.total td.num{color:var(--amber)}
+
+  /* ---------- roadmap ---------- */
+  .sprints{display:flex;flex-direction:column;gap:0;margin:20px 0 8px}
+  .sprint{display:grid;grid-template-columns:1fr;gap:2px;padding:16px 0;border-top:1px solid var(--rule)}
+  @media(min-width:620px){.sprint{grid-template-columns:96px minmax(0,1fr);gap:22px}}
+  .sprint:last-child{border-bottom:1px solid var(--rule)}
+  .sprint .wk{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--petrol);letter-spacing:.06em;padding-top:2px}
+  .sprint h4{margin:0 0 5px;font-size:15.5px;font-weight:700}
+  .sprint p{margin:0;font-size:14.5px;color:var(--ink-2)}
+
+  .note{
+    border:1px solid var(--rule);background:var(--amber-soft);padding:16px 18px;margin-top:28px;
+    font-size:14px;color:var(--ink-2);
+  }
+  .note b{color:var(--ink)}
+  footer{border-top:1px solid var(--rule);margin-top:12px;padding-top:18px;font-size:13px;color:var(--ink-3)}
+  a{color:var(--petrol)}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">Дилерский центр «АвтоГрад» · концепция внедрения · учебный проект</p>
+    <h1>Три ассистента АвтоГрада</h1>
+    <p class="deck">Мы не автоматизируем «общение». Мы закрываем три места, где дилер теряет деньги молча: непринятый лид вечером, незакрытая вакансия продавца и клиент, который после гарантии ушёл в гаражный сервис.</p>
+    <div class="facts">
+      <div class="fact"><b>3</b><span>ассистента на одной базе знаний</span></div>
+      <div class="fact"><b>≤60 сек</b><span>первый ответ в любом канале, 24/7</span></div>
+      <div class="fact"><b>9</b><span>триггеров немедленной передачи человеку</span></div>
+      <div class="fact"><b>6 недель</b><span>от промптов до пилота на одном ДЦ</span></div>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Содержание">
+      <p class="toc-title">Содержание</p>
+      <ol>
+        <li><a href="#s1"><em>01</em><span>Где теряются деньги</span></a></li>
+        <li><a href="#s2"><em>02</em><span>Три ассистента</span></a></li>
+        <li><a href="#s3"><em>03</em><span>Отклонённые кандидаты</span></a></li>
+        <li><a href="#s4"><em>04</em><span>Красные линии</span></a></li>
+        <li><a href="#s5"><em>05</em><span>Архитектура</span></a></li>
+        <li><a href="#s6"><em>06</em><span>Экономика пилота</span></a></li>
+        <li><a href="#s7"><em>07</em><span>Дорожная карта</span></a></li>
+        <li><a href="#s8"><em>08</em><span>Риски и контроль</span></a></li>
+        <li><a href="#s9"><em>09</em><span>Состав поставки</span></a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="s1">
+        <div class="sec-head"><div class="sec-num">01</div><h2>Где дилер теряет деньги молча</h2></div>
+        <p class="lede">Потери автодилера редко выглядят как убыток в отчёте. Они выглядят как непрочитанное сообщение в 21:40, как резюме мастера-приёмщика, на которое ответили через двое суток, и как машина, уехавшая на ТО в гараж у дома.</p>
+        <div class="nodes">
+          <div class="node">
+            <div>
+              <h4>Узел 1. Вход: лид дороже, чем кажется</h4>
+              <p>Клиент пишет одновременно 3–5 дилерам и покупает у того, кто ответил первым и по делу. 40–55% обращений приходят вне часов активной работы отдела продаж. Менеджер сознательно фильтрует поток: «горячим» перезванивает, сложным — нет.</p>
+            </div>
+            <div class="sum">1,5–1,75 млн ₽<small>в месяц при 1000 лидов</small></div>
+          </div>
+          <div class="node">
+            <div>
+              <h4>Узел 2. Люди: текучка как постоянная статья расходов</h4>
+              <p>Продавцы-консультанты и мастера-приёмщики — 50–70% текучки в год. Это 60–80 замен ежегодно при штате 250 человек. HR-служба из 2–3 человек одновременно разбирает 200 откликов на вакансию и выдаёт справки 2-НДФЛ.</p>
+            </div>
+            <div class="sum">9–14 млн ₽<small>в год на замещение</small></div>
+          </div>
+          <div class="node">
+            <div>
+              <h4>Узел 3. Удержание: сервис рентабельнее продажи</h4>
+              <p>Новый автомобиль даёт 3–7% маржи раз в 4–6 лет. Сервис и запчасти — 25–40% маржи 2–4 раза в год. К третьему году владения 50–70% клиентов уходят в независимые СТО, потому что про ТО никто вовремя не напомнил, а на жалобу ответили на следующий день.</p>
+            </div>
+            <div class="sum">до 70%<small>отвала клиентской базы</small></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s2">
+        <div class="sec-head"><div class="sec-num">02</div><h2>Три ассистента — по одному на каждый узел</h2></div>
+        <p>Каждый ассистент — это системный промпт, база знаний и карта эскалаций. Все трое говорят от лица «АвтоГрада», честно представляются ботом и в любой момент передают диалог человеку.</p>
+
+        <div class="asst">
+          <div class="asst-top">
+            <h3>«Первый контакт»</h3>
+            <span class="tag">Продажи · внешний</span>
+          </div>
+          <p class="role">Принимает 100% входящих обращений с сайта, Авито, Авто.ру и мессенджеров, подбирает автомобиль из живого стока, квалифицирует клиента и передаёт менеджеру готовую карточку с назначенным тест-драйвом.</p>
+          <dl>
+            <dt>Задачи</dt>
+            <dd><ul>
+              <li>Ответ за 30 секунд в любом канале и в любое время</li>
+              <li>Подбор 2–3 позиций из стока по бюджету, кузову, КПП, пробегу</li>
+              <li>Квалификация: срок покупки, форма оплаты, трейд-ин, город</li>
+              <li>Бронь слота на тест-драйв, напоминания за 24 часа и за 2 часа</li>
+              <li>Вилка ежемесячного платежа и вилка оценки авто в зачёт</li>
+              <li>Реанимация молчащих лидов: 2 часа / 1 день / 3 дня</li>
+            </ul></dd>
+            <dt>Ключевые KPI</dt>
+            <dd class="kpi">Время первого ответа <span>≤60 сек</span> · лид → визит <span>15% → 25%</span> · обработано лидов <span>100%</span> · квалифицированных карточек в CRM <span>≥85%</span></dd>
+            <dt>Не делает</dt>
+            <dd>Не согласовывает скидку и финальную цену, не оформляет бронь с предоплатой, не запрашивает паспорт и данные карты, не торгуется.</dd>
+          </dl>
+        </div>
+
+        <div class="asst">
+          <div class="asst-top">
+            <h3>«Кадровик»</h3>
+            <span class="tag">HR · два контура</span>
+          </div>
+          <p class="role">Единая точка входа по людям: отвечает кандидату за минуту и сотруднику за минуту, оставляя HR-службе только решения. Внешний контур — отклики, скрининг, приглашения на интервью. Внутренний — онбординг и кадровая рутина.</p>
+          <dl>
+            <dt>Задачи</dt>
+            <dd><ul>
+              <li>Разбор отклика: сверка с профилем вакансии и стоп-факторами, саммари рекрутеру</li>
+              <li>Структурированный скрининг по чек-листу роли (6–8 вопросов)</li>
+              <li>Запись на интервью в слоты нанимающего менеджера + напоминания</li>
+              <li>Корректный отказ с проверяемой причиной в течение суток</li>
+              <li>Онбординг: план первых 14 дней, доступы, наставник, чек-лист</li>
+              <li>Кадровые вопросы сотрудников: отпуск, справки, перенос смены, регламенты</li>
+            </ul></dd>
+            <dt>Ключевые KPI</dt>
+            <dd class="kpi">Первое касание <span>≤5 мин</span> · откликов без рекрутера <span>≥65%</span> · неявка на интервью <span>35% → 15%</span> · time-to-hire <span>21 → 12 дней</span></dd>
+            <dt>Не делает</dt>
+            <dd>Не принимает решение о найме и не формулирует отказ по существу, не обсуждает доход вне опубликованной вилки, не консультирует по ТК РФ, не запрашивает паспорт и СНИЛС на скрининге, не делает выводов о возрасте, поле и семейном положении.</dd>
+          </dl>
+        </div>
+
+        <div class="asst">
+          <div class="asst-top">
+            <h3>«АвтоГрад Сервис»</h3>
+            <span class="tag">Постпродажа · внешний</span>
+          </div>
+          <p class="role">Точка входа владельца после выдачи автомобиля: гарантия, регламент ТО, запись, статус ремонта, приём претензии. Работает на удержание клиента до повторной покупки — и на возврат его же автомобиля в трейд-ин.</p>
+          <dl>
+            <dt>Задачи</dt>
+            <dd><ul>
+              <li>По VIN и пробегу называет ближайшее ТО, состав работ и цену по прайсу</li>
+              <li>Запись в сервис вне часов работы + напоминания</li>
+              <li>Статус ремонта по номеру заказ-наряда с отметкой времени обновления</li>
+              <li>Условия гарантии — с явной передачей решения сервисному менеджеру</li>
+              <li>Приём претензии: VIN, хронология, фото, приоритет, SLA 2 часа</li>
+              <li>Проактивные кампании: истекающая гарантия, сезонные пакеты, 4-й год владения</li>
+            </ul></dd>
+            <dt>Ключевые KPI</dt>
+            <dd class="kpi">Возврат на плановое ТО <span>75% → 85%</span> · закрыто без человека <span>55–65%</span> · no-show <span>20% → 8%</span> · негатив снят до публичного отзыва <span>80%</span></dd>
+            <dt>Не делает</dt>
+            <dd>Не выносит решение по гарантийному случаю, не ставит диагноз по описанию симптомов, не называет итоговую стоимость ремонта до дефектовки, не обещает сроки, компенсации и подменный автомобиль.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="s3">
+        <div class="sec-head"><div class="sec-num">03</div><h2>Что мы рассмотрели и не взяли</h2></div>
+        <p>В проработку были взяты пять кандидатов. Два сильных концепта не попали в тройку как отдельные продукты — но их содержание осталось в проекте.</p>
+
+        <h3>F&amp;I-ассистент: трейд-ин, кредит, страхование</h3>
+        <p>Самый сильный аргумент против нашей тройки: F&amp;I-блок даёт 40–60% валовой прибыли отдела продаж, а кредитный специалист в салоне один и работает только в часы ДЦ. Мы не согласились с тем, что он должен заменить «Первый контакт»: у него нет верха воронки, и его порог запуска выше всех — ПДн кредитной заявки, согласование дисклеймеров с юристами, риск трактовки расчёта как оферты.</p>
+        <p><strong>Решение:</strong> F&amp;I входит в проект как отдельная ветка сценариев внутри «Первого контакта» — вилка платежа, вилка оценки авто по матрице коэффициентов, чек-лист документов, — с обязательной передачей человеку на залоге, юрлице, лизинге и любом торге. Выделение в самостоятельного четвёртого ассистента — вторая очередь, после пилота.</p>
+
+        <h3>Внутренний диспетчер знаний и заявок</h3>
+        <p>Кандидат честно ответил на главный вопрос о себе: это скорее слой, чем витрина. Его ценность — единый источник правды по регламентам, акциям и статусам, ролевая модель доступа и владельцы контента. Как отдельный продукт он слабее клиентских ассистентов, а как фундамент — обязателен: без него трое остальных начнут расходиться в ответах.</p>
+        <p><strong>Решение:</strong> его ролевая модель и дисциплина владения записями становятся слоем базы знаний (раздел 05). Ассистент для сотрудников — третья очередь.</p>
+      </section>
+
+      <section id="s4">
+        <div class="sec-head"><div class="sec-num">04</div><h2>Красные линии: что ассистенты не делают никогда</h2></div>
+        <p>Это не ограничение функциональности, а защита от главного риска проекта: фраза бота становится обязательством дилера. Ограничения зашиты в системные промпты и проверяются еженедельным аудитом логов по ключевым словам «бесплатно», «гарантийно», «компенсир», «к пятнице».</p>
+        <div class="redline">
+          <p>Ни один ассистент не имеет права:</p>
+          <ul>
+            <li>назвать окончательную цену, скидку, сумму выкупа или ставку — только диапазон с оговоркой «не является публичной офертой»;</li>
+            <li>признать или отклонить гарантийный случай;</li>
+            <li>обещать срок, компенсацию или подменный автомобиль;</li>
+            <li>принять решение о найме, отказе по существу или индивидуальном оффере;</li>
+            <li>запрашивать паспорт, СНИЛС, данные карты и скан-копии документов;</li>
+            <li>отвечать при отсутствии записи в базе знаний — вместо ответа идёт эскалация.</li>
+          </ul>
+        </div>
+        <p><strong>Девять триггеров немедленной передачи человеку:</strong> упоминание суда, юриста, Роспотребнадзора или публичного отзыва; торг; повторный ремонт одного узла; простой свыше 5 рабочих дней; вопросы безопасности (тормоза, рулевое, airbag); корпоративный клиент; агрессия; два неудачных ответа подряд; прямая просьба «свяжите с человеком».</p>
+        <p><strong>После передачи бот замолкает.</strong> Любое сообщение менеджера клиенту немедленно переводит диалог в режим человека — иначе выходит худшее из возможного: менеджер пишет из CRM, бот параллельно отвечает на предыдущую реплику, и клиент разговаривает с двумя собеседниками сразу. Управление возвращается боту только по команде менеджера или после двух часов тишины, и при возврате он это проговаривает.</p>
+        <p><strong>Обещания сверяются с часами работы отдела.</strong> «Менеджер свяжется в течение 15 минут» в 23:40 — это ложь бота, то есть ровно тот риск, ради которого написан весь раздел. Вне рабочих часов ассистент называет реальное время ответа утром и ставит обращение в очередь.</p>
+      </section>
+
+      <section id="s5">
+        <div class="sec-head"><div class="sec-num">05</div><h2>Архитектура: один слой знаний, три витрины</h2></div>
+        <p>Принципиальное решение проекта — ассистенты не хранят знания в промптах. Промпт задаёт роль, тон и сценарий; факты приходят из базы знаний с версией, владельцем и датой актуальности. Нет записи — нет ответа.</p>
+        <div class="flow">
+          <div class="lane"><div class="lane-t">Каналы</div><p>Сайт · Авито · Авто.ру · WhatsApp · Telegram · VK · карьерная страница</p></div>
+          <div class="arrow">↓</div>
+          <div class="lane"><div class="lane-t">Три ассистента</div><p>«Первый контакт» · «Кадровик» · «АвтоГрад Сервис» — роль, тон, сценарии, стоп-листы</p></div>
+          <div class="arrow">↓</div>
+          <div class="lane accent"><div class="lane-t">Слой базы знаний — единый источник правды</div><p>Сток и VIN · прайс и регламенты ТО · условия гарантии · профили вакансий и регламенты · акции с датой окончания · скрипты по ролям · карта эскалаций и SLA. У каждой записи есть владелец, версия и срок жизни; просроченная помечается «требует подтверждения».</p></div>
+          <div class="arrow">↓</div>
+          <div class="lane"><div class="lane-t">Системы дилера</div><p>CRM · DMS · календарь загрузки постов · календарь интервью · кадровый портал</p></div>
+          <div class="arrow">↓</div>
+          <div class="lane"><div class="lane-t">Человек</div><p>Менеджер, рекрутер, мастер-приёмщик, менеджер по качеству — принимают решения и подхватывают эскалации по SLA</p></div>
+        </div>
+        <h3>Учебный контур: что работает по-настоящему, а что на фикстурах</h3>
+        <p>На учебном этапе у нас нет ни DMS заказчика, ни партнёрских доступов к площадкам. Это не обходится заглушками в коде: каждая внешняя система живёт за контрактом с двумя реализациями, и появление реальной системы означает новый адаптер, а не переделку ядра.</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Чего нет</th><th>Замена в демо</th><th>Что не изменится при переходе</th></tr></thead>
+            <tbody>
+              <tr><td>DMS дилера</td><td>Фикстуры: 40 авто, 12 заказ-нарядов, история по VIN</td><td>Контракт, таймаут, поведение при рассинхроне</td></tr>
+              <tr><td>CRM</td><td>Локальная таблица сделок и лог вызовов</td><td>Формат карточки лида</td></tr>
+              <tr><td>WhatsApp, Avito</td><td>Telegram как демо-канал</td><td>Канальный адаптер и дедупликация</td></tr>
+              <tr><td>SMS и телефония</td><td>Заглушка, пишущая отправку в лог</td><td>Контракт границы с n8n</td></tr>
+              <tr><td>Живой сток</td><td>CSV-фид, включая режим «данные протухли»</td><td>Отказ отвечать при рассинхроне свыше 4 часов</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Побочная выгода: сценарии отказа, которые на живой системе воспроизвести трудно, на фикстурах проверяются в один клик — включая те, ради которых написана лестница деградации.</p>
+        <p>Системные промпты пишутся в вендоронезависимом формате и переносятся в GPTs, GigaChat, YandexGPT или no-code без переписывания. Демо работает на OpenAI, целевой контур — на российском провайдере: выбор модели остаётся строкой конфигурации.</p>
+      </section>
+
+      <section id="s6">
+        <div class="sec-head"><div class="sec-num">06</div><h2>Экономика пилота</h2></div>
+        <p>Модель построена на вымышленных данных дилера «АвтоГрад» и служит для проверки логики расчёта, а не для прогноза. Все исходные величины — гипотезы, которые проверяются на пилоте.</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Источник эффекта</th><th>Механика</th><th>В месяц</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Прирост маржи от дополнительных визитов</td>
+                <td>+10 п.п. конверсии ≈ 100 визитов, 30% доходимость до сделки, маржа 90 000 ₽</td>
+                <td class="num">2 700 000 ₽</td>
+              </tr>
+              <tr>
+                <td>Сокращение простоя вакансий</td>
+                <td>6 замен в месяц × 9 дней × 10 000 ₽ упущенной маржи в день</td>
+                <td class="num">540 000 ₽</td>
+              </tr>
+              <tr>
+                <td>Возврат на плановое ТО</td>
+                <td>+10 п.п. удержания, средний чек ТО 17 900 ₽, маржа 30%</td>
+                <td class="num">480 000 ₽</td>
+              </tr>
+              <tr>
+                <td>Высвобожденное время</td>
+                <td>≈5 ч/день по отделу продаж и приёмке</td>
+                <td class="num">210 000 ₽</td>
+              </tr>
+              <tr class="total">
+                <td>Оценочный эффект</td>
+                <td>при подтверждении гипотез на пилоте</td>
+                <td class="num">≈3,9 млн ₽</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note"><b>Не суммируется отдельной строкой: спасённый рекламный бюджет — 750 000 ₽ в месяц</b> (1000 лидов, 15% не обработаны, 5 000 ₽ за лид). Эти же лиды уже учтены в первой строке как источник прироста визитов. Показываем их отдельно, чтобы не посчитать один поток дважды — с таким сложением итог легко раздуть до 4,7 млн ₽, и это была бы ошибка.</div>
+        <p style="margin-top:16px">Главная проверяемая гипотеза пилота — не размер эффекта, а его источник: растёт ли конверсия именно из-за скорости первого ответа. Поэтому пилот запускается на одном ДЦ с контрольной группой лидов, обрабатываемых по-старому.</p>
+      </section>
+
+      <section id="s7">
+        <div class="sec-head"><div class="sec-num">07</div><h2>Дорожная карта</h2></div>
+        <div class="sprints">
+          <div class="sprint">
+            <div class="wk">Недели 1–2</div>
+            <div>
+              <h4>База знаний и промпты</h4>
+              <p>Сбор FAQ по трём отделам, типовых обращений и скриптов по ролям. Три системных промпта с ролью, сценариями, ограничениями и стоп-листами. Оформление в Google Docs с оглавлением и навигацией по разделам.</p>
+            </div>
+          </div>
+          <div class="sprint">
+            <div class="wk">Недели 3–4</div>
+            <div>
+              <h4>Сборка и обкатка на тестовых данных</h4>
+              <p>Сборка на вендоронезависимом формате промпта, подключение фикстур стока, прайса и вакансий. Прогон 60 эталонных диалогов на каждого ассистента, включая конфликтные. Калибровка эскалаций и проверка переносимости между платформами.</p>
+            </div>
+          </div>
+          <div class="sprint">
+            <div class="wk">Недели 5–6</div>
+            <div>
+              <h4>Пилот на одном ДЦ</h4>
+              <p>Запуск в двух каналах с контрольной группой. SLA подхвата эскалации 10 минут. Еженедельный аудит 50 диалогов, кнопка «ответ неверен», отчёт по KPI из раздела 02.</p>
+            </div>
+          </div>
+          <div class="sprint">
+            <div class="wk">Далее</div>
+            <div>
+              <h4>Очереди 2 и 3</h4>
+              <p>Выделение F&amp;I-ассистента в самостоятельный продукт и запуск внутреннего диспетчера для сотрудников на уже собранном слое базы знаний.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s8">
+        <div class="sec-head"><div class="sec-num">08</div><h2>Риски и контроль качества</h2></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Риск</th><th>Как снимаем</th></tr></thead>
+            <tbody>
+              <tr><td>Обещание бота становится обязательством дилера</td><td>Стоп-лист формулировок в промпте, запрет на числа сроков и компенсаций, дисклеймер при каждой цене, еженедельный аудит логов по ключевым словам</td></tr>
+              <tr><td>Галлюцинация по наличию, комплектации, регламенту</td><td>Ответ только из базы знаний с цитатой и датой; нет записи — эскалация; выборочное ревью 50 ответов в неделю</td></tr>
+              <tr><td>Устаревшие данные стока и акций</td><td>Владелец и срок жизни у каждой записи, отметка времени обновления в ответе, блокировка ответа при рассинхроне свыше 4 часов</td></tr>
+              <tr><td>Bias в HR-скрининге</td><td>Скоринг только по критериям профиля вакансии, маскирование полей возраста, пола и семейного положения, ежемесячный аудит распределения отказов</td></tr>
+              <tr><td>Персональные данные</td><td>Явное согласие до сбора контакта, минимизация полей, детектор паспортных и карточных номеров, срок хранения и автоудаление</td></tr>
+              <tr><td>Недоверие сотрудников</td><td>Ассистент не отбирает сделки, а отдаёт готовые карточки; мотивация не меняется; пилот на одном ДЦ; кнопка «ответ неверен» с разбором</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="s9">
+        <div class="sec-head"><div class="sec-num">09</div><h2>Состав поставки</h2></div>
+        <ul>
+          <li><strong>Три системных промпта</strong> — название и цель, приветствие и начало диалога, роль и тон, пошаговые сценарии, ограничения, типовые вопросы и ответы.</li>
+          <li><strong>База знаний по трём отделам</strong> — FAQ, типовые обращения, скрипты общения по ролям, карта эскалаций с SLA.</li>
+          <li><strong>Документ в Google Docs</strong> — оглавление, отдельный раздел на каждого ассистента, сквозная навигация.</li>
+          <li><strong>Набор эталонных диалогов</strong> для приёмки: happy path и нестандартные сценарии, включая конфликтные.</li>
+          <li><strong>Вендоронезависимый формат промпта</strong> — переносится в GPTs, GigaChat, YandexGPT и no-code платформы без переписывания.</li>
+        </ul>
+        <div class="note">
+          <b>Оговорка по данным.</b> Это учебный проект. Дилер «АвтоГрад», модели, цены, вакансии, имена сотрудников, телефоны и банки-партнёры вымышлены. Проект демонстрирует логику работы ассистентов и контур защиты от рисков; персональные данные реальных лиц не используются и не обрабатываются.
+        </div>
+      </section>
+
+      <footer>Концепция внедрения нейроассистентов · дилерский центр «АвтоГрад» · сентябрь 2026</footer>
+    </main>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var map = {};
+    links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+    var sections = Array.prototype.slice.call(document.querySelectorAll('main section'));
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          links.forEach(function(a){ a.classList.remove('on'); });
+          var a = map[e.target.id];
+          if(a) a.classList.add('on');
+        }
+      });
+    }, {rootMargin:'-10% 0px -75% 0px'});
+    sections.forEach(function(s){ io.observe(s); });
+  })();
+</script>

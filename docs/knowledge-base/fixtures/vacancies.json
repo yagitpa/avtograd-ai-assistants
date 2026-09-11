@@ -1,0 +1,111 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "owner": "emp-06",
+    "updated_at": "2026-09-11"
+  },
+  "vacancies": [
+    {
+      "id": "vac-01",
+      "title": "Продавец-консультант (новые автомобили)",
+      "department": "sales_new",
+      "location": "dc-north",
+      "salary_from_rub": 60000,
+      "salary_to_rub": 180000,
+      "schedule": "2/2, 09:00–21:00",
+      "openings": 3,
+      "compensation": "Оклад 60 000 ₽ + процент, совокупно 110 000–180 000 ₽ при выполнении плана",
+      "probation_months": 3,
+      "benefits": [
+        "ДМС с 6-го месяца",
+        "корпоративное обучение",
+        "скидка на обслуживание автомобиля"
+      ]
+    },
+    {
+      "id": "vac-02",
+      "title": "Продавец-консультант (автомобили с пробегом)",
+      "department": "sales_used",
+      "location": "dc-west",
+      "salary_from_rub": 55000,
+      "salary_to_rub": 170000,
+      "schedule": "2/2, 09:00–21:00",
+      "openings": 2,
+      "compensation": "Оклад 55 000 ₽ + процент от маржи",
+      "probation_months": 3,
+      "benefits": [
+        "ДМС с 6-го месяца",
+        "корпоративное обучение",
+        "скидка на обслуживание автомобиля"
+      ]
+    },
+    {
+      "id": "vac-03",
+      "title": "Мастер-приёмщик",
+      "department": "service",
+      "location": "dc-north",
+      "salary_from_rub": 90000,
+      "salary_to_rub": 130000,
+      "schedule": "2/2, 08:00–20:00",
+      "openings": 2,
+      "compensation": "Оклад 70 000 ₽ + процент от нормо-часов и допродаж",
+      "probation_months": 3,
+      "benefits": [
+        "ДМС с 6-го месяца",
+        "корпоративное обучение",
+        "скидка на обслуживание автомобиля"
+      ]
+    },
+    {
+      "id": "vac-04",
+      "title": "Автомеханик",
+      "department": "service",
+      "location": "dc-north",
+      "salary_from_rub": 80000,
+      "salary_to_rub": 140000,
+      "schedule": "5/2, 08:00–17:00",
+      "openings": 3,
+      "compensation": "Сдельная оплата от выработки нормо-часов",
+      "probation_months": 3,
+      "benefits": [
+        "ДМС с 6-го месяца",
+        "корпоративное обучение",
+        "скидка на обслуживание автомобиля"
+      ]
+    },
+    {
+      "id": "vac-05",
+      "title": "Менеджер отдела дополнительного оборудования",
+      "department": "sales_new",
+      "location": "dc-north",
+      "salary_from_rub": 50000,
+      "salary_to_rub": 120000,
+      "schedule": "5/2, 10:00–19:00",
+      "openings": 1,
+      "compensation": "Оклад 50 000 ₽ + процент с установленного оборудования",
+      "probation_months": 3,
+      "benefits": [
+        "ДМС с 6-го месяца",
+        "корпоративное обучение",
+        "скидка на обслуживание автомобиля"
+      ]
+    },
+    {
+      "id": "vac-06",
+      "title": "Специалист отдела кредитования",
+      "department": "credit",
+      "location": "dc-west",
+      "salary_from_rub": 70000,
+      "salary_to_rub": 130000,
+      "schedule": "2/2, 10:00–20:00",
+      "openings": 1,
+      "compensation": "Оклад 70 000 ₽ + вознаграждение за одобренные заявки",
+      "probation_months": 3,
+      "benefits": [
+        "ДМС с 6-го месяца",
+        "корпоративное обучение",
+        "скидка на обслуживание автомобиля"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,362 @@
+<title>План сборки АвтоГрада</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@400;600&display=swap">
+<style>
+  :root{
+    --paper:#F1F2EE;--surface:#FAFBF8;--ink:#14181A;--ink-2:#454D4E;--ink-3:#6E7674;
+    --rule:#D6D9D2;--rule-soft:#E4E7E0;--petrol:#0E5257;--petrol-soft:#DCE7E5;
+    --amber:#A9650F;--amber-soft:#F0E3CE;--critical:#9A3626;--shadow:0 1px 0 rgba(20,24,26,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#101413;--surface:#171C1B;--ink:#E9ECE6;--ink-2:#B3BAB6;--ink-3:#848D89;
+      --rule:#2A312F;--rule-soft:#232928;--petrol:#5FB8B4;--petrol-soft:#16302F;
+      --amber:#D9A05A;--amber-soft:#2C2519;--critical:#D97D68;--shadow:0 1px 0 rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#101413;--surface:#171C1B;--ink:#E9ECE6;--ink-2:#B3BAB6;--ink-3:#848D89;
+    --rule:#2A312F;--rule-soft:#232928;--petrol:#5FB8B4;--petrol-soft:#16302F;
+    --amber:#D9A05A;--amber-soft:#2C2519;--critical:#D97D68;--shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:"Golos Text","Segoe UI",system-ui,sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .page{max-width:1180px;margin:0 auto;padding:0 24px 96px}
+
+  .masthead{padding:52px 0 30px;border-bottom:1px solid var(--rule)}
+  .eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 20px}
+  .eyebrow a{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--rule)}
+  .eyebrow a:hover{color:var(--petrol)}
+  h1{font-family:"Unbounded","Golos Text",sans-serif;font-weight:600;font-size:clamp(32px,5vw,54px);line-height:1.05;letter-spacing:-.02em;margin:0 0 18px;text-wrap:balance;max-width:15ch}
+  .deck{font-size:clamp(16.5px,2vw,19px);line-height:1.5;color:var(--ink-2);max-width:64ch;margin:0}
+
+  /* timeline strip */
+  .strip{margin:34px 0 0;overflow-x:auto}
+  .strip-inner{display:flex;min-width:880px;border:1px solid var(--rule);background:var(--surface)}
+  .seg{flex:var(--w,1);padding:12px 12px 13px;border-right:1px solid var(--rule-soft);min-width:104px}
+  .seg:last-child{border-right:0}
+  .seg.gate{background:var(--petrol-soft);border-left:2px solid var(--petrol);border-right:2px solid var(--petrol)}
+  .seg b{display:block;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;color:var(--petrol);margin-bottom:5px;white-space:nowrap}
+  .seg span{display:block;font-size:12.5px;color:var(--ink-2);line-height:1.35}
+  .strip-legend{margin-top:9px;font-size:12.5px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+
+  .body-grid{display:grid;grid-template-columns:1fr;gap:44px;padding-top:40px}
+  @media(min-width:1000px){.body-grid{grid-template-columns:206px minmax(0,1fr);gap:56px}}
+  nav.toc{align-self:start}
+  @media(min-width:1000px){nav.toc{position:sticky;top:28px}}
+  .toc-title{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 14px}
+  .toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .toc a{display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:baseline;padding:5px 0;text-decoration:none;color:var(--ink-2);font-size:14px;line-height:1.35}
+  .toc a em{font-family:"IBM Plex Mono",monospace;font-style:normal;font-size:11.5px;color:var(--ink-3)}
+  .toc a:hover{color:var(--petrol)}
+  .toc a.on{color:var(--ink);font-weight:600}
+  .toc a.on em{color:var(--petrol)}
+  .toc a:focus-visible{outline:2px solid var(--petrol);outline-offset:3px;border-radius:2px}
+
+  main{min-width:0}
+  section{margin-bottom:54px;scroll-margin-top:24px}
+  .sec-head{display:flex;gap:14px;align-items:baseline;margin-bottom:16px}
+  .sec-num{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--petrol);letter-spacing:.08em;padding-top:4px}
+  h2{font-family:"Unbounded","Golos Text",sans-serif;font-weight:400;font-size:clamp(21px,2.6vw,28px);line-height:1.18;letter-spacing:-.015em;margin:0;text-wrap:balance}
+  h3{font-size:16.5px;font-weight:700;margin:24px 0 8px}
+  p{margin:0 0 14px;max-width:66ch}
+  main ul,main ol{margin:0 0 15px;padding-left:20px;max-width:66ch}
+  main li{margin-bottom:6px}
+  .lede{font-size:17.5px;color:var(--ink-2);max-width:64ch}
+  code{font-family:"IBM Plex Mono",monospace;font-size:.88em;background:var(--petrol-soft);padding:1px 5px;color:var(--ink)}
+
+  /* stage */
+  .stage{border:1px solid var(--rule);background:var(--surface);padding:20px 20px 6px;margin:0 0 16px;box-shadow:var(--shadow)}
+  .stage-top{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between}
+  .stage h3{margin:0;font-family:"Unbounded",sans-serif;font-weight:400;font-size:18px;letter-spacing:-.01em}
+  .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;color:var(--petrol);background:var(--petrol-soft);padding:4px 9px;white-space:nowrap}
+  .goal{font-size:14.5px;color:var(--ink-2);margin:8px 0 14px;max-width:62ch}
+  .stage dl{display:grid;grid-template-columns:1fr;margin:0;border-top:1px solid var(--rule-soft)}
+  @media(min-width:620px){.stage dl{grid-template-columns:126px minmax(0,1fr)}}
+  .stage dt{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:13px 0 2px}
+  @media(min-width:620px){.stage dt{padding:13px 0;border-top:1px solid var(--rule-soft)}}
+  .stage dd{margin:0;padding:0 0 13px;font-size:14.5px;color:var(--ink-2)}
+  @media(min-width:620px){.stage dd{padding:13px 0;border-top:1px solid var(--rule-soft)}}
+  .stage dd ul{margin:0;padding-left:17px}
+  .stage dd li{margin-bottom:5px}
+  .check{color:var(--ink);font-weight:500}
+
+  .gate{border:1px solid var(--petrol);background:var(--petrol-soft);padding:18px 20px;margin:26px 0}
+  .gate b{display:block;font-family:"Unbounded",sans-serif;font-weight:400;font-size:17px;margin-bottom:7px}
+  .gate p{margin:0;font-size:14.5px;color:var(--ink-2)}
+
+  .tbl-wrap{overflow-x:auto;margin:18px 0 8px;border-top:1px solid var(--rule)}
+  table{border-collapse:collapse;width:100%;min-width:540px;font-size:14.5px}
+  th,td{text-align:left;padding:11px 14px 11px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  th{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:400}
+  td.w{font-weight:600;white-space:nowrap}
+  .note{border:1px solid var(--rule);background:var(--amber-soft);padding:15px 17px;margin:22px 0;font-size:14px;color:var(--ink-2)}
+  .note b{color:var(--ink)}
+  footer{border-top:1px solid var(--rule);margin-top:10px;padding-top:18px;font-size:13px;color:var(--ink-3)}
+  a{color:var(--petrol)}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">План работ · <a href="https://claude.ai/code/artifact/cd9487da-f954-4088-827e-eeaf87ee6de8">концепция</a> · <a href="https://claude.ai/code/artifact/872fb966-f99f-45e7-9892-2c058064d320">архитектура</a></p>
+    <h1>План сборки АвтоГрада</h1>
+    <p class="deck">Семь этапов, 23 рабочих дня. Работа устроена так, что требования ТЗ закрываются на двенадцатый день, а всё остальное — работающее демо — наращивается поверх готового результата, а не вместо него.</p>
+
+    <div class="strip">
+      <div class="strip-inner">
+        <div class="seg" style="--w:2"><b>Э0 · 2 дня</b><span>Данные и каркас</span></div>
+        <div class="seg" style="--w:4"><b>Э1 · 4 дня</b><span>База знаний</span></div>
+        <div class="seg" style="--w:4"><b>Э2 · 4 дня</b><span>Три промпта</span></div>
+        <div class="seg gate" style="--w:2"><b>Э3 · 2 дня</b><span>Прогон и сдача ТЗ</span></div>
+        <div class="seg" style="--w:6"><b>Э4 · 6 дней</b><span>Ядро демо</span></div>
+        <div class="seg" style="--w:2"><b>Э5 · 2 дня</b><span>Контур n8n</span></div>
+        <div class="seg" style="--w:3"><b>Э6 · 3 дня</b><span>Отказы и приёмка</span></div>
+      </div>
+      <p class="strip-legend">Ширина сегмента пропорциональна трудоёмкости. Выделенный этап — точка, после которой работу можно сдавать.</p>
+    </div>
+  </header>
+
+  <div class="body-grid">
+    <nav class="toc" aria-label="Содержание">
+      <p class="toc-title">Содержание</p>
+      <ol>
+        <li><a href="#s1"><em>01</em><span>Логика порядка</span></a></li>
+        <li><a href="#s2"><em>02</em><span>Э0 · Данные</span></a></li>
+        <li><a href="#s3"><em>03</em><span>Э1 · База знаний</span></a></li>
+        <li><a href="#s4"><em>04</em><span>Э2 · Промпты</span></a></li>
+        <li><a href="#s5"><em>05</em><span>Э3 · Сдача ТЗ</span></a></li>
+        <li><a href="#s6"><em>06</em><span>Э4 · Ядро демо</span></a></li>
+        <li><a href="#s7"><em>07</em><span>Э5 · Контур n8n</span></a></li>
+        <li><a href="#s8"><em>08</em><span>Э6 · Приёмка</span></a></li>
+        <li><a href="#s9"><em>09</em><span>Риски плана</span></a></li>
+        <li><a href="#s10"><em>10</em><span>За пределами плана</span></a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="s1">
+        <div class="sec-head"><div class="sec-num">01</div><h2>Почему этапы идут именно в таком порядке</h2></div>
+        <p class="lede">Порядок здесь не организационная формальность. Три зависимости жёсткие, и нарушение любой из них означает переделку, а не задержку.</p>
+        <ul>
+          <li><b>Данные раньше промптов.</b> Если писать сценарии до того, как существуют сток, прайс и регламент гарантии, промпт начнёт придумывать цифры — ровно тот риск, против которого написан весь раздел красных линий. Ассистент может называть только те факты, у которых есть источник в фикстурах.</li>
+          <li><b>Инварианты раньше текстов.</b> Протокол передачи диалога человеку и календарь работы отделов (ADR-0004) меняют формулировки в каждом из трёх промптов. Дописать их потом — значит переписать все сценарии заново.</li>
+          <li><b>Требования ТЗ раньше демо.</b> Промпты и база знаний — это обязательный результат. Работающее ядро — доказательство, что результат жизнеспособен. Если время кончится, оно кончится на доказательстве, а не на обязательной части.</li>
+        </ul>
+        <div class="note"><b>Единый источник правды.</b> Промпты и база знаний живут в Markdown в репозитории. Из него собираются и HTML-страницы, и документ для сдачи в Google Docs. Обратный порядок — писать сразу в Docs — означает ручной перенос структуры перед сдачей и потерю оглавления.</div>
+      </section>
+
+      <section id="s2">
+        <div class="sec-head"><div class="sec-num">02</div><h2>Этап 0. Мир «АвтоГрада»</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>Данные и каркас</h3><span class="tag">2 дня</span></div>
+          <p class="goal">Появляется вымышленная вселенная дилера, на которую потом опираются и промпты, и демо. Всё, что ассистент сможет сказать клиенту, должно быть здесь.</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li>Карточка дилера: два ДЦ, адреса, контакты, роли сотрудников</li>
+              <li><b>Часы работы отделов и график дежурств</b> — без этого нечем параметризовать обещания из ADR-0004</li>
+              <li>Сток: 40 автомобилей с VIN, ценами, статусами, включая позицию «в резерве» и «продано вчера»</li>
+              <li>Прайс ТО, нормо-час, регламент гарантии</li>
+              <li>12 заказ-нарядов и история обслуживания по VIN</li>
+              <li>6 вакансий с вилками, профили ролей со стоп-факторами, 20 резюме-фикстур</li>
+              <li>Структура репозитория, README, шаблон записи базы знаний</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd><code>docs/knowledge-base/fixtures/</code> — JSON и CSV, пригодные и для чтения человеком, и для загрузки в демо</dd>
+            <dt>Критерий</dt>
+            <dd class="check">Любой факт, который может назвать ассистент, имеет источник в фикстурах. Данные заведомо вымышленные и помечены как тестовые.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="s3">
+        <div class="sec-head"><div class="sec-num">03</div><h2>Этап 1. База знаний</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>FAQ, обращения, скрипты, эскалации</h3><span class="tag">4 дня</span></div>
+          <p class="goal">Слой знаний из ADR-0001: факты живут здесь, а не в промптах. Каждая запись имеет владельца, версию и срок жизни — это то, что потом не даст трём ассистентам разойтись в ответах.</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li>Формат записи: идентификатор, тип, владелец, дата, срок жизни, тело, теги</li>
+              <li>FAQ по трём отделам — по 20–25 записей на отдел</li>
+              <li>Типовые обращения с классификатором — по 15 на отдел</li>
+              <li>Скрипты по ролям: продавец, рекрутер, мастер-приёмщик, менеджер по качеству</li>
+              <li>Карта эскалаций: девять триггеров, адресат, SLA <b>в рабочих часах отдела</b></li>
+              <li>Стоп-лист формулировок для валидатора</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd><code>docs/knowledge-base/</code> — Markdown, готовый и к сборке в Docs, и к индексации в RAG</dd>
+            <dt>Критерий</dt>
+            <dd class="check">У 100% записей есть владелец и дата. Для каждого из девяти триггеров эскалации существует запись с адресатом и сроком. Ни одна запись не противоречит другой — проверяется вычиткой пар по пересекающимся темам.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="s4">
+        <div class="sec-head"><div class="sec-num">04</div><h2>Этап 2. Три системных промпта</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>Каркас и три роли поверх него</h3><span class="tag">4 дня</span></div>
+          <p class="goal">Сначала общий каркас, потом три роли. Обратный порядок даёт три разных представления об одних и тех же красных линиях — и расхождения всплывают на конфликтных сценариях, то есть в самый дорогой момент.</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li><b>Общий каркас:</b> тон, красные линии, правило «нет записи — нет ответа», протокол передачи человеку, поведение вне рабочих часов, формат ответа</li>
+              <li>«Первый контакт» — продажи, с веткой F&amp;I из ADR-0001</li>
+              <li>«Кадровик» — HR, внешний и внутренний контуры</li>
+              <li>«АвтоГрад Сервис» — постпродажа, с разбором конфликтного обращения</li>
+              <li>Вендоронезависимый манифест: роль, сценарии, ограничения, ссылки на записи базы знаний</li>
+              <li>Секции по ТЗ в каждом: название и цель, приветствие, роль и тон, пошаговые сценарии, ограничения, типовые вопросы и ответы</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd><code>docs/prompts/</code> — три промпта плюс общий каркас</dd>
+            <dt>Критерий</dt>
+            <dd class="check">Все шесть секций ТЗ присутствуют в каждом промпте. Протокол handoff и поведение вне рабочих часов есть во всех трёх — проверяется поиском по тексту, а не на глаз. Ни один промпт не содержит фактов, которые должны приходить из базы знаний.</dd>
+          </dl>
+        </div>
+        <div class="note"><b>Пишем по правилам скилла <code>ai-instruction-design</code>.</b> Промпт — конфигурация, а не проза: он не становится лучше от слов «обязательно» и «никогда». В репозитории скилла есть разборы before/after для телеграм-бота поддержки и клиента GigaChat — сверяемся с ними как с образцом формы.</div>
+      </section>
+
+      <section id="s5">
+        <div class="sec-head"><div class="sec-num">05</div><h2>Этап 3. Прогон и сдача</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>Эталонные диалоги и документ</h3><span class="tag">2 дня</span></div>
+          <p class="goal">Проверка, что написанное работает, и сборка результата в форму, которую требует ТЗ.</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li>По 20 эталонных диалогов на ассистента, из них не менее 8 нестандартных: торг, жалоба, машина продана, клиент прислал паспорт, обращение в 23:40, попытка выпросить скидку через инъекцию</li>
+              <li>Прогон вручную на OpenAI, фиксация расхождений, правка промптов</li>
+              <li>Сборка документа в Google Docs: оглавление, раздел на каждого ассистента, база знаний приложением</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd>Документ в Google Docs плюс набор диалогов как приложение к сдаче</dd>
+            <dt>Критерий</dt>
+            <dd class="check">Ни в одном из 60 диалогов ассистент не назвал цену как окончательную, не признал гарантийный случай, не пообещал срок и не выдал факт, которого нет в базе знаний. Каждое нарушение — правка промпта и повторный прогон.</dd>
+          </dl>
+        </div>
+        <div class="gate">
+          <b>Здесь требования ТЗ закрыты полностью</b>
+          <p>Три системных промпта, база знаний по трём отделам, оформление в Google Docs с оглавлением, готовность к переносу в GPTs и no-code. Двенадцатый рабочий день. Всё, что дальше, — доказательство работоспособности, а не условие сдачи.</p>
+        </div>
+        <p><b>Почему 20 диалогов, а не 60.</b> В концепции для заказчика заявлены 60 на ассистента — это объём приёмки пилота на живом ДЦ. Для учебной сдачи 20 при условии, что 8 из них конфликтные, покрывают все девять триггеров эскалации и все красные линии. Расхождение зафиксировано сознательно, а не по недосмотру.</p>
+      </section>
+
+      <section id="s6">
+        <div class="sec-head"><div class="sec-num">06</div><h2>Этап 4. Ядро демо</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>Горячий контур на Python</h3><span class="tag">6 дней</span></div>
+          <p class="goal">Работающий диалог в Telegram на фикстурах. Собирается по ADR-0002 и ADR-0004 — инварианты закладываются сразу, а не «когда дойдут руки».</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li>Схема данных: <code>contact</code>, <code>channel_identity</code>, диалог, сообщение с версией промпта и идентификаторами записей KB, <code>dealer_id</code> везде</li>
+              <li>FastAPI, приём сообщений, дедупликация по <code>channel + message_id</code></li>
+              <li>Адаптер LLM поверх LiteLLM, PII-шлюз с токенизацией, RAG на pgvector с гибридным поиском</li>
+              <li>Валидатор красных линий — детерминированный, на правилах</li>
+              <li>Машина состояний владения диалогом</li>
+              <li>Telegram в режиме long polling, порты DMS и CRM с фикстурными реализациями</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd>Сквозной диалог в Telegram: подбор авто, запись, статус ремонта, эскалация</dd>
+            <dt>Критерий</dt>
+            <dd class="check">Валидатор ловит подсунутое обещание скидки. Сообщение «менеджера» немедленно глушит бота. В логе каждого ответа видно версию промпта и записи базы знаний, из которых он собран.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="s7">
+        <div class="sec-head"><div class="sec-num">07</div><h2>Этап 5. Холодный контур</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>n8n и проверка границы</h3><span class="tag">2 дня</span></div>
+          <p class="goal">Фоновая половина схемы и главное — доказательство, что граница из ADR-0002 существует не только на бумаге.</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li>Синхронизация стока по расписанию, включая сценарий «фид протух»</li>
+              <li>Follow-up молчащим лидам, напоминания о записи, дайджест руководителю</li>
+              <li>Вызовы только через API ядра с идентификаторами — ни одного обращения к БД напрямую</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd>Четыре рабочих сценария в n8n плюс протокол проверки границы</dd>
+            <dt>Критерий</dt>
+            <dd class="check">n8n выключается при живом диалоге — диалог завершается штатно. В логах n8n нет ни одного телефона и ни одного имени клиента.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="s8">
+        <div class="sec-head"><div class="sec-num">08</div><h2>Этап 6. Отказы, метрики, приёмка</h2></div>
+        <div class="stage">
+          <div class="stage-top"><h3>Лестница деградации и демонстрация</h3><span class="tag">3 дня</span></div>
+          <p class="goal">Проверяем не то, что система работает, а то, как она ломается. На фикстурах это делается в один клик — на живой системе воспроизвести такие сценарии почти невозможно.</p>
+          <dl>
+            <dt>Состав</dt>
+            <dd><ul>
+              <li>Намеренные отказы: отключение фикстуры DMS, протухший сток, недоступный провайдер, полное падение ядра — проверка уровней L1–L4</li>
+              <li>Метрики качества: доля «не знаю», доля сработок валидатора, доля эскалаций</li>
+              <li>Прогон 10 диалогов на бесплатных лимитах GigaChat и YandexGPT — приёмочный тест независимости от провайдера</li>
+              <li>Демо-сценарий на 10 минут и запись прохода</li>
+            </ul></dd>
+            <dt>Выход</dt>
+            <dd>Отчёт о поведении под отказами, дашборд метрик, записанное демо</dd>
+            <dt>Критерий</dt>
+            <dd class="check">Ни при одном из четырёх отказов клиент не остался без ответа. Смена провайдера LLM заняла ровно одну строку конфигурации — или ADR-0002 признаётся не выполненным, и это честно фиксируется в журнале.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="s9">
+        <div class="sec-head"><div class="sec-num">09</div><h2>Риски плана и точки остановки</h2></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Риск</th><th>Как видим заранее</th><th>Что делаем</th></tr></thead>
+            <tbody>
+              <tr><td class="w">Время кончилось</td><td>Этап 3 не закрыт к концу третьей недели</td><td>Останавливаемся после этапа 3: ТЗ закрыто, демо не начинаем. Это не аварийный сценарий, а заложенная точка выхода</td></tr>
+              <tr><td class="w">База знаний противоречит сама себе</td><td>Конфликтные ответы на этапе 3</td><td>Вычитка пар записей по пересекающимся темам — дешевле на этапе 1, чем после написания промптов</td></tr>
+              <tr><td class="w">Промпты распухают</td><td>Факты начинают дублироваться в промпте и в базе знаний</td><td>Правило «нет записи — нет ответа» проверяется поиском фактов в тексте промпта на каждой итерации</td></tr>
+              <tr><td class="w">Демо перетягивает силы</td><td>Правки промптов откладываются ради кода</td><td>Этапы 4–6 не меняют промпты, а используют их. Любая правка промпта возвращает нас к прогону этапа 3</td></tr>
+              <tr><td class="w">Расход на токены выше ожидаемого</td><td>Отслеживается после первого полного прогона</td><td>Регрессы переводятся на mini-класс модели, включается кэш по хешу «промпт + контекст»</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="s10">
+        <div class="sec-head"><div class="sec-num">10</div><h2>Что осталось за пределами плана</h2></div>
+        <p>Сознательно не входит в эти 23 дня и относится к следующим очередям из ADR-0001:</p>
+        <ul>
+          <li><b>Пилот на живом ДЦ</b> с контрольной группой лидов — требует данных заказчика и его сотрудников, в учебном контуре невоспроизводим.</li>
+          <li><b>F&amp;I как самостоятельный ассистент</b> — вторая очередь; сейчас он существует веткой сценариев внутри «Первого контакта».</li>
+          <li><b>Внутренний диспетчер для сотрудников</b> — третья очередь; его ролевая модель уже заложена в слой базы знаний.</li>
+          <li><b>Боевые интеграции</b> — DMS, CRM, WhatsApp, SMS. Каждая означает новый адаптер за существующим портом, а не переделку ядра: именно ради этого этап 0 начинается с фикстур.</li>
+        </ul>
+        <div class="note"><b>Порядок работ зафиксирован</b> в инженерном журнале как ADR-0006 от 11 сентября 2026, вместе с решением о 20 эталонных диалогах вместо 60 для учебной сдачи.</div>
+      </section>
+
+      <footer>План реализации · нейроассистенты дилерского центра «АвтоГрад» · учебный проект, данные вымышлены</footer>
+    </main>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var map = {};
+    links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+    var sections = Array.prototype.slice.call(document.querySelectorAll('main section'));
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          links.forEach(function(a){ a.classList.remove('on'); });
+          var a = map[e.target.id];
+          if(a) a.classList.add('on');
+        }
+      });
+    }, {rootMargin:'-10% 0px -75% 0px'});
+    sections.forEach(function(s){ io.observe(s); });
+  })();
+</script>

@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "disclaimer": "Учебный проект. Данные вымышлены, совпадения случайны.",
+    "updated_at": "2026-09-11",
+    "owner": "emp-03",
+    "purpose": "ADR-0004: обещания ассистентов параметризуются рабочим временем отдела",
+    "sla_basis": "Все SLA считаются в рабочих часах отдела, а не в астрономических"
+  },
+  "timezone": "Europe/Moscow",
+  "schedule": {
+    "sales_new": {
+      "mon-sun": [
+        "09:00",
+        "21:00"
+      ]
+    },
+    "sales_used": {
+      "mon-sun": [
+        "09:00",
+        "21:00"
+      ]
+    },
+    "service": {
+      "mon-fri": [
+        "08:00",
+        "20:00"
+      ],
+      "sat": [
+        "09:00",
+        "18:00"
+      ],
+      "sun": null
+    },
+    "parts": {
+      "mon-fri": [
+        "08:00",
+        "19:00"
+      ],
+      "sat": [
+        "09:00",
+        "16:00"
+      ],
+      "sun": null
+    },
+    "credit": {
+      "mon-sun": [
+        "10:00",
+        "20:00"
+      ]
+    },
+    "hr": {
+      "mon-fri": [
+        "09:00",
+        "18:00"
+      ],
+      "sat": null,
+      "sun": null
+    },
+    "quality": {
+      "mon-fri": [
+        "09:00",
+        "18:00"
+      ],
+      "sat": null,
+      "sun": null
+    }
+  },
+  "holidays_2026": [
+    {
+      "date": "2026-11-04",
+      "name": "День народного единства",
+      "mode": "сокращённый день до 18:00"
+    },
+    {
+      "date": "2026-12-31",
+      "name": "31 декабря",
+      "mode": "до 17:00"
+    },
+    {
+      "date": "2027-01-01",
+      "name": "Новый год",
+      "mode": "выходной"
+    }
+  ],
+  "on_call": {
+    "description": "Дежурный по «красным» обращениям вне часов работы отдела",
+    "red_sla_hours": 2,
+    "roster": [
+      {
+        "weekday": "mon",
+        "service": "emp-01",
+        "quality": "emp-02"
+      },
+      {
+        "weekday": "tue",
+        "service": "emp-08",
+        "quality": "emp-02"
+      },
+      {
+        "weekday": "wed",
+        "service": "emp-01",
+        "quality": "emp-02"
+      },
+      {
+        "weekday": "thu",
+        "service": "emp-08",
+        "quality": "emp-02"
+      },
+      {
+        "weekday": "fri",
+        "service": "emp-01",
+        "quality": "emp-02"
+      },
+      {
+        "weekday": "sat",
+        "service": "emp-08",
+        "quality": null
+      },
+      {
+        "weekday": "sun",
+        "service": null,
+        "quality": null
+      }
+    ]
+  },
+  "out_of_hours_policy": {
+    "promise_allowed": false,
+    "must_state": "реальное время ответа в следующий рабочий час отдела",
+    "queue": "обращение ставится в очередь с меткой времени и адресатом",
+    "exception": "вопросы безопасности — контакт помощи на дороге круглосуточно"
+  }
+}
