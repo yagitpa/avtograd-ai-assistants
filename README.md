@@ -31,6 +31,35 @@
     └── chat.py                 запуск ассистента в диалоге
 ```
 
+## Установка и настройка
+
+```bash
+python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+Дальше открыть `.env` и заполнить. Сам `.env` в репозиторий не попадает — он в `.gitignore`.
+
+| Переменная | Зачем | Где взять |
+|---|---|---|
+| `OPENAI_API_KEY` | Вызов модели | Личный кабинет OpenAI |
+| `AVTOGRAD_MODEL` | Модель по умолчанию | Необязательно, по умолчанию `gpt-5-mini` |
+| `AVTOGRAD_CLIENT_BOT_TOKEN` | Клиентский бот: продажи, найм, сервис | @BotFather → `/newbot` |
+| `AVTOGRAD_STAFF_BOT_TOKEN` | Внутренний бот: контур сотрудников | @BotFather → отдельный бот |
+| `AVTOGRAD_STAFF_IDS` | Кому открыт внутренний контур | Числовые id через запятую |
+
+Пустой `AVTOGRAD_STAFF_IDS` означает «никого»: внутренний бот молча отклонит всех и запишет идентификаторы обратившихся в журнал запуска — оттуда их и добавляют.
+
+## Запуск ботов
+
+```bash
+python tools/telegram_bots.py            # оба бота
+python tools/telegram_bots.py client     # только клиентский
+python tools/telegram_bots.py staff      # только внутренний
+```
+
+Long polling — белый IP, домен и сертификат не нужны, демо работает с ноутбука.
+
 ## Как поговорить с ассистентами
 
 ```bash

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import csv
 import json
 import re
@@ -20,6 +21,29 @@ ROOT = Path(__file__).resolve().parent.parent
 KB = ROOT / "docs" / "knowledge-base"
 FIX = KB / "fixtures"
 PROMPTS = ROOT / "docs" / "prompts"
+
+
+def load_env(path: Path | None = None) -> None:
+    """Читает .env из корня проекта.
+
+    Уже заданная переменная окружения приоритетнее файла: так временный
+    экспорт в консоли перекрывает .env, а не наоборот.
+    """
+    path = path or ROOT / '.env'
+    if not path.exists():
+        return
+    for raw in path.read_text(encoding='utf-8').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        value = value.strip().strip('"').strip("'")
+        if value:
+            os.environ.setdefault(key.strip(), value)
+
+
+load_env()
+DEFAULT_MODEL = os.environ.get('AVTOGRAD_MODEL', 'gpt-5-mini')
 
 ROLES = {
     "sales": {"file": "sales.md", "department": "sales_new", "name": "Первый контакт"},
@@ -288,10 +312,11 @@ def validate_outgoing(text: str) -> list[str]:
 
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
-           model: str = "gpt-5-mini", extra_context: str = "") -> dict:
+           model: str | None = None, extra_context: str = "") -> dict:
     """История — список {'role': 'user'|'assistant', 'content': str}."""
     from openai import OpenAI
 
+    model = model or DEFAULT_MODEL
     now = now or datetime.now()
     last_user = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
 

@@ -17,7 +17,7 @@ import sys
 from datetime import datetime
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
-from assistant import ROLES, answer  # noqa: E402
+from assistant import DEFAULT_MODEL, ROLES, answer  # noqa: E402
 
 # Консоль Windows по умолчанию cp1251 — символ рубля и кириллица в неё не влезают.
 for _stream in (sys.stdout, sys.stderr):
@@ -61,7 +61,7 @@ def main() -> int:
                     choices=["bot_owned", "human_owned", "returning"],
                     help="кто владеет диалогом (ADR-0004)")
     ap.add_argument("--stale", action="store_true", help="данные стока устарели")
-    ap.add_argument("--model", default="gpt-5-mini")
+    ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="показывать найденные записи и работу валидатора")
     args = ap.parse_args()

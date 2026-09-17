@@ -38,7 +38,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import httpx  # noqa: E402
 
-from assistant import ROLES, answer  # noqa: E402
+from assistant import ROLES, answer, load_env  # noqa: E402
+
+load_env()
 from router import ROUTE_NAMES, route  # noqa: E402
 
 for _s in (sys.stdout, sys.stderr):
