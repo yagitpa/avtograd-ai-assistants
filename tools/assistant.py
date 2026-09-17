@@ -118,14 +118,93 @@ def load_stock() -> list[dict]:
         return list(csv.DictReader(fh, delimiter=";"))
 
 
-def find_vehicles(query: str, limit: int = 4) -> list[dict]:
+# Клиент пишет по-русски и как придётся: «вега кросс», «Аврора Х5», «кроссовер до 2.5 млн».
+CYRILLIC_NAMES = {
+    "вега": "Vega", "веге": "Vega", "вегу": "Vega",
+    "аврора": "Aurora", "авроры": "Aurora", "аврору": "Aurora", "авроре": "Aurora",
+    "вектор": "Vector", "вектора": "Vector",
+    "кросс": "Cross", "кросса": "Cross", "кроссе": "Cross",
+    "седан": "Sedan", "седана": "Sedan", "седане": "Sedan",
+    "спорт": "Sport", "спорта": "Sport",
+    "х3": "X3", "x3": "X3", "х5": "X5", "x5": "X5", "с7": "S7", "s7": "S7",
+}
+BODY_WORDS = {
+    "кроссовер": "кроссовер", "кроссоверы": "кроссовер", "кроссовера": "кроссовер",
+    "внедорожник": "кроссовер", "паркетник": "кроссовер",
+    "седан": "седан", "седаны": "седан", "седана": "седан",
+    "купе": "купе",
+}
+USED_WORDS = ("пробегом", " бу", "б/у", "подержан", "вторичк")
+NEW_WORDS = ("новый", "новая", "новое", "новые", "новых")
+
+
+def parse_budget(query: str) -> int | None:
+    """«до 2.5 млн», «2 миллиона», «500 тысяч», «2 500 000» → рубли."""
+    q = query.lower().replace(",", ".")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:млн|миллион\w*)", q)
+    if m:
+        return int(float(m.group(1)) * 1_000_000)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:тыс\w*)", q)
+    if m:
+        return int(float(m.group(1)) * 1_000)
+    m = re.search(r"\b(\d[\d\s]{5,})\b", q)
+    if m:
+        return int(m.group(1).replace(" ", ""))
+    return None
+
+
+def model_bodies() -> dict:
+    return {(m["make"], m["model"]): m["body"] for m in load_json("models.json")["models"]}
+
+
+def find_vehicles(query: str, limit: int = 5) -> list[dict]:
+    """Поиск по стоку на естественной формулировке: название латиницей или
+    кириллицей, тип кузова, состояние, бюджет. Пустой список — запрос не про
+    подбор автомобиля."""
     rows = load_stock()
     q = query.lower()
-    hits = []
-    for r in rows:
-        if r["vin"].lower() in q or r["model"].lower() in q and r["make"].lower() in q \
-                or r["model"].lower() in q:
-            hits.append(r)
+    words = set(re.findall(r"[а-яёa-z0-9/]+", q))
+
+    by_vin = [r for r in rows if r["vin"].lower() in q]
+    if by_vin:
+        return by_vin[:limit]
+
+    all_makes = {r["make"] for r in rows}
+    all_models = {r["model"] for r in rows}
+    spotted = {CYRILLIC_NAMES[w] for w in words if w in CYRILLIC_NAMES}
+    spotted |= {m for m in all_makes if m.lower() in q}
+    spotted |= {m for m in all_models if m.lower() in q}
+    makes = spotted & all_makes
+    models = spotted & all_models
+    named = makes | models
+
+    bodies = {BODY_WORDS[w] for w in words if w in BODY_WORDS}
+    budget = parse_budget(q)
+    used = any(w in q for w in USED_WORDS)
+    new = any(w in q for w in NEW_WORDS)
+
+    if not (named or bodies or budget or used or new):
+        return []
+
+    hits = list(rows)
+    if makes and models:      # «вега кросс» — обе части, иначе выпадет вся марка
+        hits = [r for r in hits if r["make"] in makes and r["model"] in models]
+    elif models:
+        hits = [r for r in hits if r["model"] in models]
+    elif makes:
+        hits = [r for r in hits if r["make"] in makes]
+    elif bodies:
+        lookup = model_bodies()
+        hits = [r for r in hits
+                if any(b in lookup.get((r["make"], r["model"]), "") for b in bodies)]
+    if used:
+        hits = [r for r in hits if r["condition"] == "used"]
+    elif new:
+        hits = [r for r in hits if r["condition"] == "new"]
+    if budget:
+        hits = [r for r in hits if int(r["price_rub"]) <= budget * 1.05]
+
+    hits.sort(key=lambda r: (r["status"] != "in_stock", int(r["price_rub"])))
     return hits[:limit]
 
 
@@ -169,6 +248,16 @@ def build_context(role: str, now: datetime, owner: str, stale: bool) -> str:
     return "\n".join(lines)
 
 
+# Статусы стока на языке клиента: in_stock в ответе клиенту — утечка служебного кода.
+STATUS_RU = {
+    "in_stock": "в наличии на площадке",
+    "reserved": "в резерве",
+    "prep": "на предпродажной подготовке",
+    "in_transit": "в пути",
+    "sold": "продан",
+}
+
+
 def build_knowledge(records: list[dict], vehicles: list[dict]) -> str:
     if not records and not vehicles:
         return "(записей по теме не найдено)"
@@ -179,7 +268,7 @@ def build_knowledge(records: list[dict], vehicles: list[dict]) -> str:
         rows = ["Позиции из стока:"]
         for v in vehicles:
             rows.append(f"  VIN {v['vin']} · {v['make']} {v['model']} {v['trim']} {v['year']} · "
-                        f"{v['price_rub']} ₽ · статус {v['status']}"
+                        f"{v['price_rub']} ₽ · {STATUS_RU.get(v['status'], v['status'])}"
                         + (f" до {v['reserved_until']}" if v['reserved_until'] else "")
                         + (f" · продан {v['sold_at']}" if v['sold_at'] else "")
                         + (f" · пробег {v['mileage_km']} км" if v['mileage_km'] != "0" else ""))
