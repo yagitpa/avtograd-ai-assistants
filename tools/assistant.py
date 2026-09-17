@@ -288,7 +288,7 @@ def validate_outgoing(text: str) -> list[str]:
 
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
-           model: str = "gpt-5-mini") -> dict:
+           model: str = "gpt-5-mini", extra_context: str = "") -> dict:
     """История — список {'role': 'user'|'assistant', 'content': str}."""
     from openai import OpenAI
 
@@ -301,7 +301,10 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
 
     records = retrieve(last_user, load_kb(role))
     vehicles = find_vehicles(last_user) if role == "sales" else []
-    blocks = (f"КОНТЕКСТ:\n{build_context(role, now, owner, stale)}\n\n"
+    context = build_context(role, now, owner, stale)
+    if extra_context:
+        context += chr(10) + extra_context
+    blocks = (f"КОНТЕКСТ:\n{context}\n\n"
               f"ЗНАНИЯ:\n{build_knowledge(records, vehicles)}")
 
     messages = [{"role": "system", "content": system_prompt(role)},
