@@ -201,21 +201,20 @@ def handle_staff(bot: Bot, upd: dict) -> None:
 
     # Внутренний контур закрыт по умолчанию: пустой список означает «никого»,
     # а не «всех». Иначе забытая переменная открывает регламенты компании любому.
+    #
+    # Посторонний не получает ответа вообще. Любая реплика — даже отказ —
+    # подтверждает, что бот существует и работает, и даёт повод пробовать
+    # дальше. Идентификатор пишется в журнал: сотрудника администратор
+    # добавит оттуда, а не со слов обратившегося.
     allowed = env_staff_ids()
-    if not allowed:
-        bot.send(chat_id,
-                 "Внутренний контур закрыт: список сотрудников не задан.\n"
-                 f"Ваш идентификатор: {user_id}. Добавьте его в AVTOGRAD_STAFF_IDS "
-                 "и перезапустите бота.")
-        print(f"[{bot.label}] список сотрудников не задан, доступ закрыт "
-              f"(обращался {user_id})")
+    if not allowed or user_id not in allowed:
+        who = msg.get("from", {})
+        handle = who.get("username")
+        reason = "список сотрудников не задан" if not allowed else "нет в списке"
+        print(f"[{bot.label}] обращение отклонено молча ({reason}): id {user_id}"
+              + (f", @{handle}" if handle else ""))
         return
-    if user_id not in allowed:
-        bot.send(chat_id,
-                 "Этот бот — внутренний контур отдела кадров, доступ по списку сотрудников.\n"
-                 f"Ваш идентификатор: {user_id}. Передайте его администратору для добавления.")
-        print(f"[{bot.label}] отказано в доступе: {user_id}")
-        return
+
     session = bot.session(chat_id)
     if text.startswith("/start"):
         session["history"] = []
