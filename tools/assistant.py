@@ -232,6 +232,42 @@ def find_vehicles(query: str, limit: int = 5) -> list[dict]:
     return hits[:limit]
 
 
+def find_owner_vehicle(query: str) -> dict | None:
+    """Карточка машины клиента по VIN или госномеру — с историей заказ-нарядов.
+
+    Без этого сервисный ассистент видел только сток, то есть машины на продажу,
+    и на VIN клиента отвечал «принял, поднимаю карточку», не имея карточки.
+    """
+    q = query.lower().replace(" ", "")
+    vehicles = load_json("vehicles.json")["vehicles"]
+    found = None
+    for v in vehicles:
+        plate = v.get("plate", "").lower().replace(" ", "")
+        if v["vin"].lower() in q or (plate and plate in q):
+            found = v
+            break
+    if not found:
+        return None
+    orders = [o for o in load_json("work_orders.json")["work_orders"]
+              if o["vehicle_id"] == found["id"]]
+    customers = {c["id"]: c for c in load_json("customers.json")["customers"]}
+    return {"vehicle": found, "orders": orders,
+            "customer": customers.get(found.get("customer_id"), {})}
+
+
+def looks_like_vehicle_id(query: str) -> bool:
+    """Похоже ли на VIN или госномер — чтобы отличить «нет такого» от «не спрашивали»."""
+    q = query.upper().replace(" ", "")
+    return bool(re.search(r"TESTAG\d{4,}", q) or
+                re.search(r"[АВЕКМНОРСТУХABEKMHOPCTYX]\d{3}[АВЕКМНОРСТУХABEKMHOPCTYX]{2}\d{2,3}", q))
+
+
+def active_promotions(today: str) -> list[dict]:
+    """Только действующие: истёкшая акция не предлагается ни при каких условиях."""
+    return [a for a in load_json("promotions.json")["promotions"]
+            if a.get("status") == "active" and a.get("to", "") >= today]
+
+
 def expand_days(key: str) -> set[str]:
     """«mon-sun» → все дни, «sat» → {sat}. Без этого диапазоны не совпадают с днём недели."""
     if "-" not in key:
@@ -282,10 +318,32 @@ STATUS_RU = {
 }
 
 
-def build_knowledge(records: list[dict], vehicles: list[dict]) -> str:
-    if not records and not vehicles:
-        return "(записей по теме не найдено)"
+def build_knowledge(records: list[dict], vehicles: list[dict],
+                    owner: dict | None = None, no_such_id: bool = False,
+                    promos: list[dict] | None = None) -> str:
     parts = []
+    if no_such_id:
+        parts.append("ПРОВЕРКА ИДЕНТИФИКАТОРА: такого VIN или госномера в базе нет. "
+                     "Сообщить об этом прямо и не делать вид, что карточка поднята.")
+    if owner:
+        v, c = owner["vehicle"], owner["customer"]
+        rows = [f"Карточка владельца: {c.get('name','—')}, {v['make']} {v['model']} {v['year']}, "
+                f"VIN {v['vin']}, госномер {v.get('plate','—')}, пробег {v['mileage_km']} км, "
+                f"куплен {v.get('purchased_at','—')}"]
+        for o in owner["orders"]:
+            rows.append(f"  наряд {o['id']}: {o['works']}, статус {o['status']}, "
+                        f"открыт {o['opened_at']}, план/закрыт {o['closed_or_planned']}"
+                        + (f", примечание: {o['note']}" if o.get("note") else ""))
+        parts.append(chr(10).join(rows))
+    if promos:
+        rows = ["Действующие акции (истёкшие не предлагать):"]
+        for a in promos:
+            rows.append(f"  {a['name']} до {a['to']}: {a.get('conditions','')}"
+                        + (f", выгода {a['benefit_rub']} ₽" if a.get("benefit_rub") else "")
+                        + (f", не сочетается с {a['not_combinable_with']}" if a.get("not_combinable_with") else ""))
+        parts.append(chr(10).join(rows))
+    if not records and not vehicles and not parts:
+        return "(записей по теме не найдено)"
     for rec in records:
         parts.append(f"[{rec.get('id')}] {rec.get('body','')}")
     if vehicles:
@@ -326,18 +384,43 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
 
     records = retrieve(last_user, load_kb(role))
     vehicles = find_vehicles(last_user) if role == "sales" else []
+
+    # Машина клиента и её наряды — для сервиса; сток тут не поможет.
+    # Имя owner_card, а не owner: owner — это владение диалогом. Его затирание
+    # отправляло в КОНТЕКСТ «владение: None», и ассистент по инварианту молчал.
+    owner_card = find_owner_vehicle(last_user) if role == "service" else None
+    no_such_id = bool(role == "service" and not owner_card and looks_like_vehicle_id(last_user))
+    promos = active_promotions(now.strftime("%Y-%m-%d")) if role == "sales" else None
     context = build_context(role, now, owner, stale)
     if extra_context:
         context += chr(10) + extra_context
     blocks = (f"КОНТЕКСТ:\n{context}\n\n"
-              f"ЗНАНИЯ:\n{build_knowledge(records, vehicles)}")
+              f"ЗНАНИЯ:\n{build_knowledge(records, vehicles, owner_card, no_such_id, promos)}")
 
     messages = [{"role": "system", "content": system_prompt(role)},
                 {"role": "system", "content": blocks}] + history
 
     client = OpenAI()
-    resp = client.chat.completions.create(model=model, messages=messages)
-    text = (resp.choices[0].message.content or "").strip()
+
+    # Модель изредка тратит весь бюджет на размышления и возвращает пустой текст.
+    # Молчание в ответ клиенту неотличимо от поломки, поэтому одна повторная
+    # попытка, а затем честная деградация до передачи человеку (уровень L3).
+    text = ""
+    for attempt in range(2):
+        try:
+            resp = client.chat.completions.create(model=model, messages=messages)
+            text = (resp.choices[0].message.content or "").strip()
+        except Exception as exc:
+            print(f"[ядро] ошибка вызова модели: {exc}")
+            text = ""
+        if text:
+            break
+
+    if not text:
+        return {"text": "Не получается ответить прямо сейчас — передаю обращение "
+                        "менеджеру, с вами свяжутся в рабочее время.",
+                "mode": "ЭСКАЛАЦИЯ (пустой ответ модели)",
+                "records": [r.get("id") for r in records], "violations": []}
 
     violations = validate_outgoing(text)
     if violations:
