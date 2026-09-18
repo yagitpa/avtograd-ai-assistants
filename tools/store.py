@@ -112,6 +112,22 @@ CREATE TABLE IF NOT EXISTS pii_token (
     UNIQUE (dialog_id, placeholder)
 );
 
+-- Очередь эскалаций: карточки, которые видит дежурный оператор.
+-- Живёт в базе, а не в памяти процесса: перезапуск не должен терять
+-- обращение, по которому клиент уже ждёт человека.
+CREATE TABLE IF NOT EXISTS escalation (
+    id          INTEGER PRIMARY KEY,
+    dialog_id   INTEGER NOT NULL REFERENCES dialog(id) ON DELETE CASCADE,
+    contour     TEXT NOT NULL DEFAULT 'client',
+    route       TEXT,
+    reason      TEXT,
+    created_at  TEXT NOT NULL,
+    taken_by    TEXT,
+    taken_at    TEXT,
+    closed_at   TEXT,
+    closed_by   TEXT
+);
+
 CREATE TABLE IF NOT EXISTS answer_cache (
     key         TEXT PRIMARY KEY,
     role        TEXT NOT NULL,
@@ -437,6 +453,85 @@ class Store:
         self.conn.commit()
         return {"dialogs": len(dialogs)}
 
+    # --- Очередь эскалаций и работа оператора ------------------------------
+
+    def add_escalation(self, dialog_id: int, route: str | None, reason: str,
+                       contour: str = "client") -> int:
+        """Ставит карточку в очередь дежурного. Повтор по тому же диалогу не плодится.
+
+        Клиент может получить несколько эскалаций подряд в одном разговоре —
+        оператору от этого не легче: карточка нужна одна, иначе очередь
+        превращается в ленту дубликатов.
+        """
+        open_card = self.conn.execute(
+            "SELECT id FROM escalation WHERE dialog_id = ? AND closed_at IS NULL"
+            " ORDER BY id DESC LIMIT 1", (dialog_id,)).fetchone()
+        if open_card:
+            return int(open_card["id"])
+        cur = self.conn.execute(
+            "INSERT INTO escalation (dialog_id, contour, route, reason, created_at)"
+            " VALUES (?, ?, ?, ?, ?)", (dialog_id, contour, route, reason, now_iso()))
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def open_escalations(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT e.*, d.channel FROM escalation e JOIN dialog d ON d.id = e.dialog_id"
+            " WHERE e.closed_at IS NULL ORDER BY e.id").fetchall()
+        return [dict(r) for r in rows]
+
+    def take_escalation(self, dialog_id: int, operator: str) -> str | None:
+        """Оператор берёт диалог. Возвращает None, если успел кто-то другой.
+
+        Один диалог — один владелец. Двое операторов, отвечающих клиенту
+        одновременно, хуже, чем ни одного: клиент видит разнобой и не знает,
+        чьё слово окончательное.
+        """
+        row = self.conn.execute(
+            "SELECT owner, owner_by FROM dialog WHERE id = ?", (dialog_id,)).fetchone()
+        if row and row["owner"] == "human_owned" and row["owner_by"] not in (None, operator):
+            return row["owner_by"]
+        self.take_over(dialog_id, operator)
+        self.conn.execute(
+            "UPDATE escalation SET taken_by = ?, taken_at = ?"
+            " WHERE dialog_id = ? AND closed_at IS NULL", (operator, now_iso(), dialog_id))
+        self.conn.commit()
+        return None
+
+    def close_escalation(self, dialog_id: int, by: str) -> None:
+        self.conn.execute(
+            "UPDATE escalation SET closed_at = ?, closed_by = ?"
+            " WHERE dialog_id = ? AND closed_at IS NULL", (now_iso(), by, dialog_id))
+        self.release(dialog_id)
+        self.conn.commit()
+
+    def held_dialog(self, operator: str) -> int | None:
+        """Какой диалог сейчас ведёт этот оператор."""
+        row = self.conn.execute(
+            "SELECT id FROM dialog WHERE owner = 'human_owned' AND owner_by = ?"
+            " ORDER BY id DESC LIMIT 1", (operator,)).fetchone()
+        return int(row["id"]) if row else None
+
+    def stale_holds(self, minutes: int) -> list[dict]:
+        """Диалоги, забранные человеком и заброшенные дольше срока.
+
+        Оператор отвлёкся — клиент остался в тишине. Возврат ассистенту это
+        не «починка», а меньшее зло: лучше ответ по регламенту, чем молчание.
+        """
+        edge = (datetime.now() - timedelta(minutes=minutes)).isoformat(timespec="seconds")
+        rows = self.conn.execute(
+            "SELECT id, owner_by, last_at FROM dialog"
+            " WHERE owner = 'human_owned' AND last_at < ?", (edge,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def channel_address(self, dialog_id: int) -> tuple[str, str] | None:
+        """Куда писать клиенту: канал и его адрес в этом канале."""
+        row = self.conn.execute(
+            "SELECT d.channel, ci.channel_user_id FROM dialog d"
+            " JOIN channel_identity ci ON ci.contact_id = d.contact_id"
+            "  AND ci.channel = d.channel WHERE d.id = ?", (dialog_id,)).fetchone()
+        return (row["channel"], row["channel_user_id"]) if row else None
+
     def stats(self) -> dict:
         def one(sql: str) -> int:
             return int(self.conn.execute(sql).fetchone()[0])
@@ -446,6 +541,7 @@ class Store:
             "диалогов": one("SELECT COUNT(*) FROM dialog"),
             "сообщений": one("SELECT COUNT(*) FROM message"),
             "значений ПДн": one("SELECT COUNT(*) FROM pii_token"),
+            "открытых эскалаций": one("SELECT COUNT(*) FROM escalation WHERE closed_at IS NULL"),
             "записей кэша": one("SELECT COUNT(*) FROM answer_cache"),
             "попаданий в кэш": one("SELECT COALESCE(SUM(hits), 0) FROM answer_cache"),
         }

@@ -39,6 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import httpx  # noqa: E402
 
 from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, answer, load_env  # noqa: E402
+from ops_console import (env_ops_ids, handle_ops, notify_operators,  # noqa: E402
+                         release_stale)
 from ports import FixtureCrm  # noqa: E402
 from store import Store  # noqa: E402
 
@@ -85,6 +87,12 @@ def env_staff_ids() -> set[int]:
     return {int(x) for x in raw.replace(";", ",").split(",") if x.strip().isdigit()}
 
 
+# Боты знают друг о друге через реестр: консоль отправляет ответ оператора
+# в клиентский канал, клиентский бот кладёт карточку эскалации в консоль.
+# Прямые ссылки между обработчиками сделали бы порядок запуска значимым.
+REGISTRY: dict[str, "Bot"] = {}
+
+
 class Bot:
     def __init__(self, token: str, label: str, channel: str):
         self.token = token
@@ -97,6 +105,8 @@ class Bot:
         # Своё подключение к базе на каждый бот: боты живут в разных потоках.
         self.store = Store()
         self.crm = FixtureCrm()
+        self.registry = REGISTRY
+        REGISTRY[channel] = self
 
     def call(self, method: str, **payload):
         try:
@@ -227,10 +237,14 @@ def handle_client(bot: Bot, upd: dict) -> None:
     if not result["text"]:
         return
     if result.get("mode", "").startswith("ЭСКАЛАЦИЯ"):
-        # Обещание «передам менеджеру» подкрепляется записью в CRM-исходящих.
+        # Обещание «передам менеджеру» подкрепляется двумя вещами: записью в
+        # CRM-исходящих и карточкой дежурному. Без второй записи эскалация
+        # оставалась строкой в файле, которую никто не читает.
         bot.crm.handover({"dialog_id": dialog_id, "contact_id": contact_id,
                           "route": chosen, "reason": result["mode"],
                           "channel": bot.channel})
+        notify_operators(REGISTRY.get("telegram-ops"), bot.store, dialog_id,
+                         chosen, result["mode"], contour="client")
     bot.send(chat_id, result["text"])
     bot.store.add_message(dialog_id, "out", result["text"], route=chosen,
                           mode=result.get("mode", ""),
@@ -292,6 +306,12 @@ def handle_staff(bot: Bot, upd: dict) -> None:
                     pii_map=bot.store.mapping(dialog_id))
     if not result["text"]:
         return
+    if result.get("mode", "").startswith("ЭСКАЛАЦИЯ"):
+        # Внутренний контур тоже эскалируется — к HR бизнес-партнёру. Карточка
+        # уходит в ту же консоль с пометкой контура: у оператора одно место,
+        # куда смотреть, а адресата подсказывает карта эскалаций.
+        notify_operators(REGISTRY.get("telegram-ops"), bot.store, dialog_id,
+                         "hr", result["mode"], contour="staff")
     bot.send(chat_id, result["text"])
     bot.store.add_message(dialog_id, "out", result["text"], route="hr",
                           mode=result.get("mode", ""),
@@ -306,6 +326,7 @@ def main() -> int:
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     client_token = os.environ.get("AVTOGRAD_CLIENT_BOT_TOKEN")
     staff_token = os.environ.get("AVTOGRAD_STAFF_BOT_TOKEN")
+    ops_token = os.environ.get("AVTOGRAD_OPS_BOT_TOKEN")
 
     if not os.environ.get("OPENAI_API_KEY"):
         print("Нет OPENAI_API_KEY — ассистенты отвечать не смогут.")
@@ -325,6 +346,17 @@ def main() -> int:
             bot = Bot(staff_token, "внутренний", "telegram-staff")
             threads.append(threading.Thread(target=bot.poll, args=(handle_staff,), daemon=True))
 
+    if which in ("all", "ops"):
+        if not ops_token:
+            print("Нет AVTOGRAD_OPS_BOT_TOKEN — консоль эскалаций не запущена: "
+                  "обращения будут копиться в очереди без адресата.")
+        elif not env_ops_ids():
+            print("AVTOGRAD_OPS_IDS пуст — консоль эскалаций запускается, но "
+                  "карточки отправлять некому.")
+        if ops_token:
+            bot = Bot(ops_token, "консоль", "telegram-ops")
+            threads.append(threading.Thread(target=bot.poll, args=(handle_ops,), daemon=True))
+
     if not threads:
         print("Нечего запускать: не задан ни один токен.")
         return 1
@@ -340,6 +372,19 @@ def main() -> int:
         print(f"Уборка: кэш прошлых версий {dropped}, просроченный кэш {aged['cache']}, "
               f"диалогов старше срока хранения {aged['dialogs']}")
     housekeeping.close()
+
+    # Сторож заброшенных диалогов: оператор мог взять разговор и уйти,
+    # и тогда клиент остаётся в тишине — худшее из состояний.
+    def watch_holds() -> None:
+        watcher = Store()
+        while True:
+            time.sleep(60)
+            try:
+                release_stale(REGISTRY, watcher)
+            except Exception:
+                traceback.print_exc()
+
+    threads.append(threading.Thread(target=watch_holds, daemon=True))
 
     for t in threads:
         t.start()
