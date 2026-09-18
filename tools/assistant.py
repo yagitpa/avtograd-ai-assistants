@@ -92,8 +92,12 @@ STOPWORDS = {"и", "в", "на", "с", "у", "по", "за", "не", "что", "
 # модели с годом выпуска читалось как названная сумма.
 # Границы обязательны: без них шаблон откусывает «5 202» от «X5 2024».
 GROUPED = r"(?<!\d)\d{1,3}(?:[   ]\d{3})+(?!\d)"
-NUM4 = rf"(?:{GROUPED}|\d{{4,}})"
-NUM6 = rf"(?:{GROUPED}|\d{{6,}})"
+# Единица измерения после числа означает, что это не деньги. «Передаю запрос
+# о сумме выкупа Vector Sedan (60 000 км)» — это пробег, и красная линия про
+# названную сумму выкупа здесь ни при чём.
+NOT_UNIT = r"(?!\s*(?:км\b|km\b|кг\b|л\b|литр|лет\b|год|мес|дн))"
+NUM4 = rf"(?:{GROUPED}|\d{{4,}}){NOT_UNIT}"
+NUM6 = rf"(?:{GROUPED}|\d{{6,}}){NOT_UNIT}"
 
 STOP_PATTERNS = {
     "решение по гарантии": re.compile(r"(это|у вас|ваш)\s+гарантийн\w+|не\s+гарантийн\w+|"
@@ -322,6 +326,31 @@ def looks_like_vehicle_id(query: str) -> bool:
                 re.search(r"[АВЕКМНОРСТУХABEKMHOPCTYX]\d{3}[АВЕКМНОРСТУХABEKMHOPCTYX]{2}\d{2,3}", q))
 
 
+# В российском госномере используются двенадцать букв, совпадающих по
+# начертанию с латиницей. «П», «Щ», «Ю» и прочие в номерах не встречаются.
+PLATE_LETTERS = set("АВЕКМНОРСТУХ") | set("ABEKMHOPCTYX")
+PLATE_SHAPE = re.compile(r"(?<![A-Za-zА-Яа-яЁё0-9])([А-Яа-яЁёA-Za-z])\s?(\d{3})\s?"
+                         r"([А-Яа-яЁёA-Za-z]{2})\s?(\d{2,3})(?![A-Za-zА-Яа-яЁё0-9])")
+
+
+def plate_note(text: str) -> str | None:
+    """Похоже ли на госномер и настоящие ли в нём буквы.
+
+    «П 001 ЩЮ 222» выглядит как номер и принимался молча: поиск его просто
+    не находил, а ассистент продолжал разговор, будто номер принят. Проверка
+    формата — это не проверка существования: она отвечает на вопрос «мог ли
+    такой номер быть выдан», и отвечает до обращения к базе.
+    """
+    for match in PLATE_SHAPE.finditer(text.upper()):
+        letters = match.group(1) + match.group(3)
+        wrong = sorted({c for c in letters if c not in PLATE_LETTERS})
+        if wrong:
+            return ("ГОСНОМЕР: в сообщении есть похожее на номер сочетание, но буквы "
+                    f"{', '.join(wrong)} в госномерах не используются. Переспросить номер; "
+                    "карточку по нему не искать и не делать вид, что он принят.")
+    return None
+
+
 def active_promotions(today: str) -> list[dict]:
     """Только действующие: истёкшая акция не предлагается ни при каких условиях."""
     return [a for a in load_json("promotions.json")["promotions"]
@@ -389,7 +418,8 @@ def phone_note(text: str) -> str | None:
 
 
 def build_context(role: str, now: datetime, owner: str, stale: bool,
-                  hours_noted: bool = False, phone: str | None = None) -> str:
+                  hours_noted: bool = False, phone: str | None = None,
+                  plate: str | None = None) -> str:
     dept = ROLES[role]["department"]
     hours, is_open = working_hours(dept, now)
     lines = [
@@ -410,6 +440,8 @@ def build_context(role: str, now: datetime, owner: str, stale: bool,
                      + ("уже звучала" if hours_noted else "ещё не звучала"))
     if phone:
         lines.append(phone)
+    if plate:
+        lines.append(plate)
     return "\n".join(lines)
 
 
@@ -478,7 +510,14 @@ def build_knowledge(records: list[dict], vehicles: list[dict],
         for o in owner["orders"]:
             rows.append(f"  наряд {o['id']}: {o['works']}, статус {o['status']}, "
                         f"открыт {o['opened_at']}, план/закрыт {o['closed_or_planned']}"
-                        + (f", примечание: {o['note']}" if o.get("note") else ""))
+                        # Примечание наряда — служебная пометка мастера, а не
+                        # сообщение клиенту. В ней встречается «страховой
+                        # случай, не гарантия»: пересказанная дословно, такая
+                        # запись превращается в вердикт по гарантии от лица
+                        # ассистента, которого он выносить не вправе.
+                        + (f", служебное примечание (клиенту не пересказывать, "
+                           f"квалификацию случая не озвучивать): {o['note']}"
+                           if o.get("note") else ""))
         parts.append(chr(10).join(rows))
     if promos:
         rows = ["Действующие акции (истёкшие не предлагать):"]
@@ -561,6 +600,26 @@ KNOWN_SUMS = known_sums()
 SUBJUNCTIVE = re.compile(r"чтобы[^.?!]{0,120}$", re.I)
 
 
+PRICE_SAID = re.compile(rf"{NUM4}\s*(?:₽|руб)", re.I)
+OFFER_NOTE = ("Информация не является публичной офертой; "
+              "окончательные условия фиксируются договором.")
+
+
+def ensure_offer_note(text: str) -> str:
+    """Дописывает оговорку об оферте, если в ответе названа цена, а оговорки нет.
+
+    Требование каркаса модель выполняет почти всегда — «почти» здесь и есть
+    проблема: в одном прогоне из трёх цена уходила клиенту без оговорки.
+    Формальность, которую нельзя пропускать, держится кодом, а не старанием
+    модели. Дописанное предложение ничего не скрывает и не меняет смысла
+    ответа — оно добавляет верное утверждение, которое обязано там быть.
+    """
+    if not PRICE_SAID.search(text) or "оферт" in text.lower():
+        return text
+    separator = " " if text.endswith((".", "!", "?", "»")) else ". "
+    return text + separator + OFFER_NOTE
+
+
 def validate_outgoing(text: str) -> list[str]:
     found = []
     for kind, pat in STOP_PATTERNS.items():
@@ -617,7 +676,8 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                       and any(w in m["content"].lower() for w in HOURS_MARKS)
                       for m in history)
     context = build_context(role, now, owner, stale,
-                            hours_noted=hours_noted, phone=phone_note(last_user))
+                            hours_noted=hours_noted, phone=phone_note(last_user),
+                            plate=plate_note(last_user))
     if extra_context:
         context += chr(10) + extra_context
 
@@ -696,6 +756,7 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                           "records": [r.get("id") for r in records],
                           "violations": [], "blocked": text}, role)
 
+    text = ensure_offer_note(text)
     violations = validate_outgoing(text)
     if violations:
         return stamp({"text": "Передаю обращение профильному специалисту — он свяжется с вами.",

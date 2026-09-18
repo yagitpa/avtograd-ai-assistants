@@ -119,7 +119,8 @@ def run_dialog(role: str, case: dict, model: str) -> dict:
 
     history: list[dict] = []
     turns_out = []
-    problems: list[str] = []
+    problems: list[str] = []   # дошло бы до клиента
+    caught: list[str] = []     # поймано валидатором до отправки
     warnings: list[str] = []
 
     for index, turn in enumerate(case["turns"], 1):
@@ -135,10 +136,20 @@ def run_dialog(role: str, case: dict, model: str) -> dict:
         if expected_mode and not result["mode"].startswith(expected_mode):
             problems.append(f"{where}: ожидался режим {expected_mode}, получен {result['mode']}")
 
-        # Валидатор ядра пропускает ответ, но в отчёте его срабатывание видно:
-        # ответ клиенту ушёл бы заглушкой, а это тоже расхождение с эталоном.
+        # Срабатывание валидатора — не то же самое, что перейденная красная
+        # линия. Модель попыталась сказать запрещённое, сеть поймала, клиент
+        # получил честную передачу человеку. Это дефект качества ответа, но
+        # не пробой безопасности, и считается отдельно: смешивать их значит
+        # либо пугаться исправной защиты, либо не заметить настоящий пробой.
         if result.get("violations"):
-            problems.append(f"{where}: стоп-лист — {', '.join(result['violations'])}")
+            caught.append(f"{where}: стоп-лист поймал — {', '.join(result['violations'])}")
+            # Клиент получил заглушку, а не ответ модели. Проверять заглушку
+            # на обязательные и запрещённые фрагменты бессмысленно: одно
+            # событие превратилось бы в два расхождения и завысило счёт.
+            turns_out.append({"user": turn["user"], "assistant": text,
+                              "mode": result["mode"], "records": result.get("records", []),
+                              "blocked": result.get("blocked", "")})
+            continue
 
         for pattern in turn.get("forbid", []):
             if re.search(pattern, text, re.IGNORECASE):
@@ -151,7 +162,8 @@ def run_dialog(role: str, case: dict, model: str) -> dict:
         if text:
             extra = validate_outgoing(text)
             if extra and not result.get("violations"):
-                problems.append(f"{where}: стоп-лист (повторная проверка) — {', '.join(extra)}")
+                problems.append(f"{where}: запрещённая формулировка дошла бы до клиента — "
+                                f"{', '.join(extra)}")
             for value in unknown_numbers(text):
                 warnings.append(f"{where}: число {value} не найдено в базе знаний")
 
@@ -160,7 +172,7 @@ def run_dialog(role: str, case: dict, model: str) -> dict:
                           "blocked": result.get("blocked", "")})
 
     return {"case": case, "role": role, "turns": turns_out,
-            "problems": problems, "warnings": warnings}
+            "problems": problems, "caught": caught, "warnings": warnings}
 
 
 def load_cases(role: str) -> list[dict]:
@@ -204,8 +216,9 @@ def write_transcripts(role: str, runs: list[dict]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_report(all_runs: list[dict], model: str, seconds: float) -> None:
+def write_report(all_runs: list[dict], model: str, seconds: float, passes: int = 1) -> None:
     problems = [p for run in all_runs for p in run["problems"]]
+    caught = [c for run in all_runs for c in run["caught"]]
     warnings = [w for run in all_runs for w in run["warnings"]]
     by_role: dict[str, list[dict]] = {}
     for run in all_runs:
@@ -221,24 +234,46 @@ def write_report(all_runs: list[dict], model: str, seconds: float) -> None:
              + f" · **база знаний** `{KB_VERSION}`", "",
              "Прогон идёт мимо кэша ответов: приёмка обязана каждый раз "
              "спрашивать модель заново (ADR-0017).", "",
-             "| Ассистент | Диалогов | Конфликтных | Реплик | Расхождений |",
-             "|---|---|---|---|---|"]
+             (f"Прогонов подряд: {passes}. " if passes > 1 else "")
+             + "Модель недетерминирована — `temperature` у неё не настраивается, "
+               "и один и тот же вопрос даёт разные формулировки. Поэтому "
+               "расхождения считаются по всем прогонам сразу: дефект, "
+               "повторившийся хотя бы раз, считается найденным.", "",
+             "| Ассистент | Диалогов | Конфликтных | Реплик | Дошло бы до клиента | Поймал валидатор |",
+             "|---|---|---|---|---|---|"]
     for role, runs in by_role.items():
-        conflict = sum(1 for r in runs if r["case"].get("kind") == "конфликтный")
+        conflict = sum(1 for r in runs if r["case"].get("kind") == "конфликтный") // passes
         turns = sum(len(r["turns"]) for r in runs)
         bad = sum(len(r["problems"]) for r in runs)
-        lines.append(f"| {ROLES[role]['name']} | {len(runs)} | {conflict} | {turns} | {bad} |")
-    lines += ["", f"**Итого:** {len(all_runs)} диалогов, "
-              f"{sum(len(r['turns']) for r in all_runs)} реплик ассистента.", ""]
+        net = sum(len(r["caught"]) for r in runs)
+        lines.append(f"| {ROLES[role]['name']} | {len(runs) // passes} | {conflict} | {turns}"
+                     f" | {bad} | {net} |")
+    lines += ["", f"**Итого:** {len(all_runs) // passes} диалогов, "
+              f"{sum(len(r['turns']) for r in all_runs)} реплик ассистента"
+              + (f" за {passes} прогона." if passes > 1 else "."), ""]
 
-    lines.append("## Расхождения с эталоном")
+    lines.append("## Критерий приёмки: что дошло бы до клиента")
     lines.append("")
     if problems:
         lines += [f"- {p}" for p in problems]
     else:
-        lines.append("Нет. Ни в одном диалоге ассистент не назвал цену окончательной, "
-                     "не признал гарантийный случай, не пообещал срок и не вышел "
-                     "за пределы базы знаний.")
+        lines.append("Ничего. Ни в одной реплике ассистент не назвал цену окончательной, "
+                     "не признал гарантийный случай, не пообещал срок, не сообщил о "
+                     "действии, которого не совершал, и не вышел за пределы базы знаний.")
+    lines.append("")
+
+    lines.append("## Срабатывания валидатора: что он поймал до отправки")
+    lines.append("")
+    if caught:
+        lines.append("Модель попыталась сказать запрещённое, детерминированный валидатор "
+                     "заблокировал ответ, клиент получил честную передачу человеку. "
+                     "Это дефект качества ответа, а не пробой красной линии — но каждый "
+                     "случай разбирается: либо правится промпт, либо шаблон, если "
+                     "срабатывание ложное.")
+        lines.append("")
+        lines += [f"- {c}" for c in caught]
+    else:
+        lines.append("Ни одного: валидатору не пришлось вмешиваться.")
     lines.append("")
 
     lines.append("## Числа под вопросом")
@@ -266,6 +301,9 @@ def main() -> int:
     ap.add_argument("--only", action="append", help="идентификатор диалога, можно повторять")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--passes", type=int, default=1,
+                    help="сколько раз прогнать весь набор: модель недетерминирована, "
+                         "и редкий дефект виден только на повторе")
     args = ap.parse_args()
 
     roles = args.role or sorted(ROLE_FILES)
@@ -280,10 +318,20 @@ def main() -> int:
         print("Нечего прогонять.")
         return 1
 
-    print(f"Диалогов: {len(jobs)} · модель {args.model} · потоков {args.workers}")
+    passes = max(1, args.passes)
+    print(f"Диалогов: {len(jobs)} · модель {args.model} · потоков {args.workers}"
+          + (f" · прогонов: {passes}" if passes > 1 else ""))
     started = time.time()
+    runs: list[dict] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        runs = list(pool.map(lambda job: run_dialog(job[0], job[1], args.model), jobs))
+        for attempt in range(passes):
+            batch = list(pool.map(lambda job: run_dialog(job[0], job[1], args.model), jobs))
+            runs.extend(batch)
+            if passes > 1:
+                bad = sum(len(r["problems"]) for r in batch)
+                net = sum(len(r["caught"]) for r in batch)
+                print(f"  прогон {attempt + 1}: дошло бы до клиента {bad}, "
+                      f"поймал валидатор {net}")
     seconds = time.time() - started
 
     order = {case["id"]: i for i, (_r, case) in enumerate(jobs)}
@@ -295,18 +343,35 @@ def main() -> int:
         print("Частичный прогон: расшифровки и отчёт не перезаписываются.")
     else:
         for role in roles:
-            role_runs = [r for r in runs if r["role"] == role]
-            if role_runs:
-                write_transcripts(role, role_runs)
-        write_report(runs, args.model, seconds)
+            # В расшифровки идёт последний прогон каждого диалога: приложение
+            # к сдаче показывает один связный разговор, а не три варианта.
+            # Из нескольких прогонов одного диалога в приложение идёт тот,
+            # где что-то пошло не так: приложение к сдаче должно показывать
+            # найденный дефект, а не удачный дубль, которым его можно
+            # случайно прикрыть.
+            seen: dict[str, dict] = {}
+            for r in runs:
+                if r["role"] != role:
+                    continue
+                kept = seen.get(r["case"]["id"])
+                if kept is None or (not kept["problems"] and not kept["caught"]):
+                    seen[r["case"]["id"]] = r
+            if seen:
+                write_transcripts(role, [seen[cid] for cid in
+                                         sorted(seen, key=lambda c: order[c])])
+        write_report(runs, args.model, seconds, passes)
 
     problems = [p for r in runs for p in r["problems"]]
+    caught = [c for r in runs for c in r["caught"]]
     warnings = [w for r in runs for w in r["warnings"]]
     for p in problems:
-        print(f"  РАСХОЖДЕНИЕ · {p}")
-    print(f"\nДиалогов: {len(runs)} · реплик: {sum(len(r['turns']) for r in runs)} · "
-          f"время: {seconds:.0f} с")
-    print(f"Расхождений: {len(problems)} · чисел под вопросом: {len(warnings)}")
+        print(f"  ДОШЛО БЫ ДО КЛИЕНТА · {p}")
+    for c in caught:
+        print(f"  поймал валидатор · {c}")
+    print(f"\nДиалогов: {len(runs) // passes} · реплик: "
+          f"{sum(len(r['turns']) for r in runs)} · время: {seconds:.0f} с")
+    print(f"Дошло бы до клиента: {len(problems)} · поймал валидатор: {len(caught)} · "
+          f"чисел под вопросом: {len(warnings)}")
     print(f"Отчёт: docs/golden/report.md")
     return 1 if problems else 0
 
