@@ -293,7 +293,43 @@ def working_hours(department: str, now: datetime) -> tuple[str, bool]:
     return f"{start}–{end}", is_open
 
 
-def build_context(role: str, now: datetime, owner: str, stale: bool) -> str:
+PHONE_RE = re.compile(r"[+]?[0-9][0-9 ()-]{5,}[0-9]")
+
+
+def phone_note(text: str) -> str | None:
+    """Похоже ли на телефон и сколько в нём цифр.
+
+    Российский номер — десять цифр без кода страны или одиннадцать с ним.
+    «+38 222 222 22» выглядит как номер, но набрать его нельзя: девять цифр.
+    Принять такой контакт молча значит пообещать звонок, которого не будет,
+    поэтому ядро помечает неполноту, а ассистент переспрашивает.
+    """
+    low = text.lower()
+    cue = any(w in low for w in ("телефон", "номер", "позвон", "звоните",
+                                 "свяж", "связат", "whatsapp", "вотсап"))
+    for raw in PHONE_RE.findall(text):
+        digits = [c for c in raw if c.isdigit()]
+        if len(digits) < 6:
+            continue
+        # С «плюсом» номер записан международно: код страны плюс национальный,
+        # для России это одиннадцать цифр. «+38 222 222 22» даёт десять —
+        # по виду номер, по факту набрать нельзя.
+        ok = (11,) if raw.startswith("+") else (10, 11)
+        if len(digits) in ok:
+            return None
+        # Бюджет «2 500 000» и дата «2026-09-18» тоже похожи на номер.
+        # Без явного признака контакта в сообщении ядро молчит: ложная
+        # просьба «уточните номер» в разговоре о цене хуже, чем пропуск.
+        if not (raw.startswith("+") or cue):
+            continue
+        return ("НОМЕР ТЕЛЕФОНА: номер в сообщении выглядит неполным "
+                f"({len(digits)} цифр). Переспросить его целиком; "
+                "на неполный номер не ссылаться и не обещать по нему связь.")
+    return None
+
+
+def build_context(role: str, now: datetime, owner: str, stale: bool,
+                  hours_noted: bool = False, phone: str | None = None) -> str:
     dept = ROLES[role]["department"]
     hours, is_open = working_hours(dept, now)
     lines = [
@@ -305,6 +341,14 @@ def build_context(role: str, now: datetime, owner: str, stale: bool) -> str:
                                     "по наличию и статусу не отвечать"
                                     if stale else "данные свежие, обновлены минуты назад"),
     ]
+    # Оговорка про нерабочее время нужна один раз. Повторённая в каждом
+    # сообщении, она вытесняет ответ по существу — дефект живого теста.
+    if not is_open:
+        lines.append("ОГОВОРКА О ВРЕМЕНИ: "
+                     + ("уже сказана в этом диалоге — не повторять"
+                        if hours_noted else "ещё не звучала — сказать один раз"))
+    if phone:
+        lines.append(phone)
     return "\n".join(lines)
 
 
@@ -391,7 +435,14 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     owner_card = find_owner_vehicle(last_user) if role == "service" else None
     no_such_id = bool(role == "service" and not owner_card and looks_like_vehicle_id(last_user))
     promos = active_promotions(now.strftime("%Y-%m-%d")) if role == "sales" else None
-    context = build_context(role, now, owner, stale)
+    # Оговорка засчитывается сказанной, как только ассистент её произнёс.
+    HOURS_MARKS = ("нерабоч", "не работает", "в очередь", "рабочий интервал",
+                   "рабочие часы", "рабочее время")
+    hours_noted = any(m["role"] == "assistant"
+                      and any(w in m["content"].lower() for w in HOURS_MARKS)
+                      for m in history)
+    context = build_context(role, now, owner, stale,
+                            hours_noted=hours_noted, phone=phone_note(last_user))
     if extra_context:
         context += chr(10) + extra_context
     blocks = (f"КОНТЕКСТ:\n{context}\n\n"
