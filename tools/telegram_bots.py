@@ -38,7 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import httpx  # noqa: E402
 
-from assistant import ROLES, answer, load_env  # noqa: E402
+from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, answer, load_env  # noqa: E402
+from store import Store  # noqa: E402
 
 load_env()
 from router import ROUTE_NAMES, route  # noqa: E402
@@ -84,12 +85,16 @@ def env_staff_ids() -> set[int]:
 
 
 class Bot:
-    def __init__(self, token: str, label: str):
+    def __init__(self, token: str, label: str, channel: str):
         self.token = token
         self.label = label
+        # Канал — часть адреса человека: один и тот же telegram id в клиентском
+        # и внутреннем боте это разные роли, и склеивать их нельзя.
+        self.channel = channel
         self.offset = 0
         self.client = httpx.Client(timeout=70)
-        self.sessions: dict[int, dict] = {}
+        # Своё подключение к базе на каждый бот: боты живут в разных потоках.
+        self.store = Store()
 
     def call(self, method: str, **payload):
         try:
@@ -109,9 +114,6 @@ class Bot:
     def typing(self, chat_id: int):
         self.call("sendChatAction", chat_id=chat_id, action="typing")
 
-    def session(self, chat_id: int) -> dict:
-        return self.sessions.setdefault(chat_id, {"route": None, "history": []})
-
     def poll(self, handler):
         me = self.call("getMe").get("result", {})
         print(f"[{self.label}] запущен как @{me.get('username', '?')}")
@@ -127,40 +129,62 @@ class Bot:
                 time.sleep(3)
 
 
-def trim(session: dict) -> None:
-    session["history"] = session["history"][-HISTORY_LIMIT:]
+def returning_note(store: Store, contact_id: int, dialog_id: int) -> str:
+    """Строка контекста о вернувшемся человеке — без содержания прошлых разговоров.
+
+    Требование заказчика: клиент, обращавшийся когда-то в сервис, должен иметь
+    возможность говорить о новых моделях как в первый раз. Поэтому в контекст
+    уходит только факт возвращения и давность, без темы: прошлый маршрут не
+    должен подсказывать ассистенту, о чём человек хочет говорить сегодня.
+    """
+    summary = store.contact_summary(contact_id)
+    if summary["dialogs"] <= 1:
+        return ""
+    try:
+        days = (datetime.now() - datetime.fromisoformat(summary["last_at"])).days
+    except (TypeError, ValueError):
+        return ""
+    when = "сегодня" if days == 0 else f"{days} дн. назад"
+    return ("СОБЕСЕДНИК: обращался к нам раньше, последний раз " + when
+            + ". Тему прошлого обращения не упоминать и не угадывать по ней текущую.")
 
 
 def handle_client(bot: Bot, upd: dict) -> None:
     if "callback_query" in upd:
         cq = upd["callback_query"]
         chat_id = cq["message"]["chat"]["id"]
+        user_id = cq.get("from", {}).get("id", chat_id)
         bot.call("answerCallbackQuery", callback_query_id=cq["id"])
         chosen = cq.get("data", "").split(":")[-1]
         if chosen in ROLES:
-            session = bot.session(chat_id)
-            session["route"] = chosen
+            contact_id = bot.store.identify(bot.channel, user_id,
+                                            cq.get("from", {}).get("username", ""))
+            dialog_id = bot.store.current_dialog(contact_id, bot.channel)
+            bot.store.set_route(dialog_id, chosen)
             bot.send(chat_id, f"{ROUTE_NAMES[chosen]}. Слушаю вас — что подсказать?")
         return
 
     msg = upd.get("message") or {}
     text = (msg.get("text") or "").strip()
     chat_id = msg.get("chat", {}).get("id")
+    who = msg.get("from", {})
     if not chat_id or not text:
         return
 
-    session = bot.session(chat_id)
+    contact_id = bot.store.identify(bot.channel, who.get("id", chat_id),
+                                    who.get("username", ""))
+    dialog_id = bot.store.current_dialog(contact_id, bot.channel)
 
     if text.startswith("/start"):
-        session["route"] = None
-        session["history"] = []
+        bot.store.close_dialog(dialog_id)
         bot.send(chat_id, GREETING, keyboard=MENU)
         return
     if text.startswith("/menu"):
         bot.send(chat_id, "К кому вас направить?", keyboard=MENU)
         return
 
-    decision = route(text, current=session["route"])
+    current = bot.store.route_of(dialog_id)
+    decision = route(text, current=current)
 
     if decision["ask"]:
         bot.send(chat_id, "Уточните, пожалуйста, с чем помочь — так я направлю вас точнее.",
@@ -170,22 +194,30 @@ def handle_client(bot: Bot, upd: dict) -> None:
     if decision["switched"]:
         # Клиент должен понимать, что говорит уже с другим отделом.
         bot.send(chat_id, f"— перевожу: {ROUTE_NAMES[decision['route']]} —")
-        session["history"] = []
 
-    session["route"] = decision["route"]
-    session["history"].append({"role": "user", "content": text})
-    trim(session)
+    chosen = decision["route"]
+    bot.store.set_route(dialog_id, chosen)
+    bot.store.add_message(dialog_id, "in", text, route=chosen)
+
+    history = bot.store.history(dialog_id, limit=HISTORY_LIMIT, route=chosen)
 
     bot.typing(chat_id)
-    result = answer(session["route"], session["history"], now=datetime.now())
+    result = answer(chosen, history, now=datetime.now(), cache=bot.store,
+                    extra_context=returning_note(bot.store, contact_id, dialog_id))
 
     if not result["text"]:
         return
     bot.send(chat_id, result["text"])
-    session["history"].append({"role": "assistant", "content": result["text"]})
-    trim(session)
+    bot.store.add_message(dialog_id, "out", result["text"], route=chosen,
+                          mode=result.get("mode", ""),
+                          prompt_version=result.get("prompt_version", ""),
+                          kb_version=result.get("kb_version", ""),
+                          records=result.get("records"))
 
-    tag = f"[{bot.label}] chat {chat_id} · {session['route']}"
+    tag = (f"[{bot.label}] контакт {contact_id} · диалог {dialog_id} · {chosen}"
+           f" · промпт {result.get('prompt_version', '—')}")
+    if result.get("cached"):
+        tag += " · из кэша"
     if decision["switched"]:
         tag += " · переключение"
     if result["violations"]:
@@ -217,22 +249,32 @@ def handle_staff(bot: Bot, upd: dict) -> None:
               + (f", @{handle}" if handle else ""))
         return
 
-    session = bot.session(chat_id)
+    contact_id = bot.store.identify(bot.channel, user_id,
+                                    msg.get("from", {}).get("username", ""))
+    dialog_id = bot.store.current_dialog(contact_id, bot.channel)
+
     if text.startswith("/start"):
-        session["history"] = []
+        bot.store.close_dialog(dialog_id)
         bot.send(chat_id, STAFF_GREETING)
         return
 
-    session["history"].append({"role": "user", "content": text})
-    trim(session)
+    bot.store.add_message(dialog_id, "in", text, route="hr")
+    history = bot.store.history(dialog_id, limit=HISTORY_LIMIT, route="hr")
+
     bot.typing(chat_id)
-    result = answer("hr", session["history"], now=datetime.now(), extra_context=STAFF_CONTEXT)
+    # Внутренний контур мимо кэша: вопросы сотрудников про отпуск и справки
+    # почти всегда касаются их самих, а выигрыш от кэша здесь исчезающе мал.
+    result = answer("hr", history, now=datetime.now(), extra_context=STAFF_CONTEXT)
     if not result["text"]:
         return
     bot.send(chat_id, result["text"])
-    session["history"].append({"role": "assistant", "content": result["text"]})
-    trim(session)
-    print(f"[{bot.label}] chat {chat_id} · внутренний контур")
+    bot.store.add_message(dialog_id, "out", result["text"], route="hr",
+                          mode=result.get("mode", ""),
+                          prompt_version=result.get("prompt_version", ""),
+                          kb_version=result.get("kb_version", ""),
+                          records=result.get("records"))
+    print(f"[{bot.label}] контакт {contact_id} · диалог {dialog_id} · внутренний контур"
+          f" · промпт {result.get('prompt_version', '—')}")
 
 
 def main() -> int:
@@ -249,18 +291,30 @@ def main() -> int:
         if not client_token:
             print("Нет AVTOGRAD_CLIENT_BOT_TOKEN — клиентский бот не запущен.")
         else:
-            bot = Bot(client_token, "клиентский")
+            bot = Bot(client_token, "клиентский", "telegram-client")
             threads.append(threading.Thread(target=bot.poll, args=(handle_client,), daemon=True))
     if which in ("all", "staff"):
         if not staff_token:
             print("Нет AVTOGRAD_STAFF_BOT_TOKEN — внутренний бот не запущен.")
         else:
-            bot = Bot(staff_token, "внутренний")
+            bot = Bot(staff_token, "внутренний", "telegram-staff")
             threads.append(threading.Thread(target=bot.poll, args=(handle_staff,), daemon=True))
 
     if not threads:
         print("Нечего запускать: не задан ни один токен.")
         return 1
+
+    # Уборка кэша чужих версий. На правильность не влияет — версия входит в
+    # ключ, — но не даёт базе копить мусор после каждой правки промпта.
+    housekeeping = Store()
+    dropped = housekeeping.cache_drop_stale(PROMPT_VERSIONS, KB_VERSION)
+    aged = housekeeping.purge()
+    print(f"Версии промптов: " + ", ".join(f"{r} {v}" for r, v in PROMPT_VERSIONS.items())
+          + f" · знания {KB_VERSION}")
+    if dropped or aged["dialogs"] or aged["cache"]:
+        print(f"Уборка: кэш прошлых версий {dropped}, просроченный кэш {aged['cache']}, "
+              f"диалогов старше срока хранения {aged['dialogs']}")
+    housekeeping.close()
 
     for t in threads:
         t.start()

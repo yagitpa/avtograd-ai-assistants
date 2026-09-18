@@ -14,6 +14,7 @@ import os
 import csv
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +22,24 @@ ROOT = Path(__file__).resolve().parent.parent
 KB = ROOT / "docs" / "knowledge-base"
 FIX = KB / "fixtures"
 PROMPTS = ROOT / "docs" / "prompts"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from versions import kb_version, prompt_version  # noqa: E402
+
+# Версии считаются один раз при импорте: процесс живёт с тем текстом промпта,
+# с которым запущен, и ответ помечается именно им (ADR-0016).
+KB_VERSION = kb_version()
+
+
+def stamp(result: dict, role: str) -> dict:
+    """Помечает ответ версиями промпта и знаний.
+
+    Без этой пометки разбор жалобы упирается в вопрос «а что тогда было
+    написано в промпте» — и ответа на него нет.
+    """
+    result["prompt_version"] = PROMPT_VERSIONS.get(role, "—")
+    result["kb_version"] = KB_VERSION
+    return result
 
 
 def load_env(path: Path | None = None) -> None:
@@ -50,6 +69,8 @@ ROLES = {
     "service": {"file": "service.md", "department": "service", "name": "АвтоГрад Сервис"},
     "hr": {"file": "hr.md", "department": "hr", "name": "Кадровик"},
 }
+
+PROMPT_VERSIONS = {role: prompt_version(role) for role in ROLES}
 
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 STOPWORDS = {"и", "в", "на", "с", "у", "по", "за", "не", "что", "как", "а", "но", "мне",
@@ -544,8 +565,13 @@ def validate_outgoing(text: str) -> list[str]:
 
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
-           model: str | None = None, extra_context: str = "") -> dict:
-    """История — список {'role': 'user'|'assistant', 'content': str}."""
+           model: str | None = None, extra_context: str = "", cache=None) -> dict:
+    """История — список {'role': 'user'|'assistant', 'content': str}.
+
+    `cache` — хранилище с методами `cache_get` / `cache_put` (ADR-0017) либо
+    None. По умолчанию кэша нет: прогон эталонных диалогов обязан каждый раз
+    спрашивать модель, иначе приёмка начнёт подтверждать сама себя.
+    """
     from openai import OpenAI
 
     model = model or DEFAULT_MODEL
@@ -553,8 +579,8 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     last_user = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
 
     if owner != "bot_owned":
-        return {"text": "", "mode": "МОЛЧАНИЕ", "records": [], "violations": [],
-                "note": "диалогом владеет сотрудник — ассистент не отвечает"}
+        return stamp({"text": "", "mode": "МОЛЧАНИЕ", "records": [], "violations": [],
+                      "note": "диалогом владеет сотрудник — ассистент не отвечает"}, role)
 
     records = retrieve(last_user, load_kb(role))
     vehicles = find_vehicles(last_user) if role == "sales" else []
@@ -575,6 +601,24 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                             hours_noted=hours_noted, phone=phone_note(last_user))
     if extra_context:
         context += chr(10) + extra_context
+
+    # Кэш ответов на обезличенные вопросы (ADR-0017). Не кэшируется ничего,
+    # что зависит от человека: карточка владельца, любой вопрос с телефоном,
+    # VIN, госномером или почтой. Признаки контекста, меняющие ответ, входят
+    # в ключ — иначе вечерний ответ про рабочие часы выдавался бы утром.
+    key = None
+    if cache is not None and owner == "bot_owned" and not stale and not owner_card:
+        from store import cache_key, pseudonymize
+        _, found_pii = pseudonymize(last_user)
+        if not found_pii and len(history) <= 2:
+            dept_open = "открыт" if working_hours(ROLES[role]["department"], now)[1] else "закрыт"
+            marks = f"{now:%Y-%m-%d}|{dept_open}|{'напоминали' if hours_noted else 'впервые'}"
+            key = cache_key(role, last_user, PROMPT_VERSIONS[role], KB_VERSION, marks)
+            hit = cache.cache_get(key)
+            if hit:
+                return stamp({"text": hit["text"], "mode": hit["mode"],
+                              "records": hit["records"], "violations": [],
+                              "cached": True}, role)
     blocks = (f"КОНТЕКСТ:\n{context}\n\n"
               f"ЗНАНИЯ:\n{build_knowledge(records, vehicles, owner_card, no_such_id, promos)}")
 
@@ -598,16 +642,25 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
             break
 
     if not text:
-        return {"text": "Не получается ответить прямо сейчас — передаю обращение "
-                        "менеджеру, с вами свяжутся в рабочее время.",
-                "mode": "ЭСКАЛАЦИЯ (пустой ответ модели)",
-                "records": [r.get("id") for r in records], "violations": []}
+        return stamp({"text": "Не получается ответить прямо сейчас — передаю обращение "
+                              "менеджеру, с вами свяжутся в рабочее время.",
+                      "mode": "ЭСКАЛАЦИЯ (пустой ответ модели)",
+                      "records": [r.get("id") for r in records], "violations": []}, role)
 
     violations = validate_outgoing(text)
     if violations:
-        return {"text": "Передаю обращение профильному специалисту — он свяжется с вами.",
-                "mode": "ЭСКАЛАЦИЯ (валидатор)", "records": [r.get("id") for r in records],
-                "violations": violations, "blocked": text}
+        return stamp({"text": "Передаю обращение профильному специалисту — он свяжется с вами.",
+                      "mode": "ЭСКАЛАЦИЯ (валидатор)",
+                      "records": [r.get("id") for r in records],
+                      "violations": violations, "blocked": text}, role)
 
-    return {"text": text, "mode": "ОТВЕТ", "records": [r.get("id") for r in records],
-            "violations": []}
+    result = stamp({"text": text, "mode": "ОТВЕТ", "records": [r.get("id") for r in records],
+                    "violations": []}, role)
+
+    # Срок жизни привязан к источнику: ответ, опирающийся на сток, живёт не
+    # дольше интервала обновления фида. Справка по регламенту живёт до смены
+    # версии знаний — она и так в ключе, так что сутки здесь только верхняя
+    # граница на случай правки фикстур без пересборки процесса.
+    if key:
+        cache.cache_put(key, role, last_user, result, 600 if vehicles else 86400)
+    return result

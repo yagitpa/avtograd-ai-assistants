@@ -41,7 +41,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from assistant import DEFAULT_MODEL, ROLES, answer, load_env, validate_outgoing  # noqa: E402
+from assistant import (DEFAULT_MODEL, KB_VERSION, PROMPT_VERSIONS, ROLES,  # noqa: E402
+                       answer, load_env, validate_outgoing)
 
 load_env()
 
@@ -213,6 +214,11 @@ def write_report(all_runs: list[dict], model: str, seconds: float) -> None:
              "руками не правится.", "",
              f"**Дата прогона:** {datetime.now():%Y-%m-%d %H:%M} · "
              f"**модель:** {model} · **время:** {seconds:.0f} с", "",
+             "**Версии промптов:** "
+             + " · ".join(f"{role} `{ver}`" for role, ver in PROMPT_VERSIONS.items())
+             + f" · **база знаний** `{KB_VERSION}`", "",
+             "Прогон идёт мимо кэша ответов: приёмка обязана каждый раз "
+             "спрашивать модель заново (ADR-0017).", "",
              "| Ассистент | Диалогов | Конфликтных | Реплик | Расхождений |",
              "|---|---|---|---|---|"]
     for role, runs in by_role.items():

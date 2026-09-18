@@ -82,6 +82,18 @@ def strip_code_and_examples(text: str) -> list[str]:
 
 
 def main() -> int:
+    # Версия промпта должна быть описана в журнале правок (ADR-0016).
+    # Проверка живёт здесь, а не отдельной командой: правило, которое можно
+    # забыть запустить, не действует.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from versions import changelog_versions, prompt_versions  # noqa: E402
+
+    recorded = changelog_versions()
+    for role, version in prompt_versions().items():
+        check(version in recorded,
+              f"промпт «{role}» версии {version} не описан в docs/prompts/CHANGELOG.md — "
+              "что изменилось, почему и какой прогон это подтвердил")
+
     core_path = PROMPTS / CORE_FILE
     check(core_path.exists(), f"нет общего каркаса {CORE_FILE}")
     core_text = core_path.read_text(encoding="utf-8") if core_path.exists() else ""
