@@ -202,7 +202,10 @@ def handle_client(bot: Bot, upd: dict) -> None:
     history = bot.store.history(dialog_id, limit=HISTORY_LIMIT, route=chosen)
 
     bot.typing(chat_id)
+    # Словарь плейсхолдеров диалога передаётся в ядро: телефон, названный в
+    # первой реплике, должен и в третьей называться тем же {{PHONE_1}}.
     result = answer(chosen, history, now=datetime.now(), cache=bot.store,
+                    pii_map=bot.store.mapping(dialog_id),
                     extra_context=returning_note(bot.store, contact_id, dialog_id))
 
     if not result["text"]:
@@ -264,7 +267,8 @@ def handle_staff(bot: Bot, upd: dict) -> None:
     bot.typing(chat_id)
     # Внутренний контур мимо кэша: вопросы сотрудников про отпуск и справки
     # почти всегда касаются их самих, а выигрыш от кэша здесь исчезающе мал.
-    result = answer("hr", history, now=datetime.now(), extra_context=STAFF_CONTEXT)
+    result = answer("hr", history, now=datetime.now(), extra_context=STAFF_CONTEXT,
+                    pii_map=bot.store.mapping(dialog_id))
     if not result["text"]:
         return
     bot.send(chat_id, result["text"])

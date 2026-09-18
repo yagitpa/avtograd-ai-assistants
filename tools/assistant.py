@@ -2,10 +2,16 @@
 
 Учебный срез ядра из ADR-0002: системный промпт = каркас + роль, факты приходят
 отдельным блоком ЗНАНИЯ, обстановка — блоком КОНТЕКСТ, исходящее сообщение
-проходит детерминированный валидатор стоп-листа. PII-шлюз и база диалогов —
-этап 4, здесь их нет.
+проходит детерминированный валидатор стоп-листа.
 
-Используется из tools/chat.py и tools/run_golden.py.
+Персональные данные не уходят в модель: перед вызовом текст проходит шлюз
+(`pii.py`), ответ разворачивается обратно. Поиск по фикстурам работает до
+шлюза — ему нужны настоящие VIN и номера, и он локальный.
+
+Ответ помечается версией промпта и версией знаний (ADR-0016) и может быть
+взят из кэша, если вопрос обезличенный (ADR-0017).
+
+Используется из tools/chat.py, tools/run_golden.py и tools/telegram_bots.py.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ FIX = KB / "fixtures"
 PROMPTS = ROOT / "docs" / "prompts"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pii import Vault  # noqa: E402
 from versions import kb_version, prompt_version  # noqa: E402
 
 # Версии считаются один раз при импорте: процесс живёт с тем текстом промпта,
@@ -79,8 +86,14 @@ STOPWORDS = {"и", "в", "на", "с", "у", "по", "за", "не", "что", "
 # --- Стоп-лист в исполняемом виде (docs/knowledge-base/stop-list.md) ---
 # Число с разделителем разрядов: «200 000» и «200000» — одна и та же сумма.
 # Без этого куска шаблон со \d{4,} пропускал любую сумму, записанную по-русски.
-NUM4 = r"\d[\d   ]{3,}"
-NUM6 = r"\d[\d   ]{5,}"
+#
+# Пробел допускается только между группами ровно по три цифры. Более
+# вольный шаблон склеивал «Aurora X5 2024» в число 52024 — и соседство
+# модели с годом выпуска читалось как названная сумма.
+# Границы обязательны: без них шаблон откусывает «5 202» от «X5 2024».
+GROUPED = r"(?<!\d)\d{1,3}(?:[   ]\d{3})+(?!\d)"
+NUM4 = rf"(?:{GROUPED}|\d{{4,}})"
+NUM6 = rf"(?:{GROUPED}|\d{{6,}})"
 
 STOP_PATTERNS = {
     "решение по гарантии": re.compile(r"(это|у вас|ваш)\s+гарантийн\w+|не\s+гарантийн\w+|"
@@ -511,7 +524,7 @@ def known_sums() -> set[int]:
     return numbers
 
 
-MONEY_RE = re.compile(r"\d[\d   ]{3,}|\d{4,}")
+MONEY_RE = re.compile(NUM4)
 MONEY_WORD = re.compile(r"скидк\w+|оклад\w*|зарплат\w+|доход\w*|компенсац\w+|выплат\w+|"
                         r"выгод\w+|сумм\w+|цен[ауые]\w*", re.I)
 # Слова, которыми обращение отправляют дальше. Сумма рядом с ними перестаёт
@@ -565,12 +578,18 @@ def validate_outgoing(text: str) -> list[str]:
 
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
-           model: str | None = None, extra_context: str = "", cache=None) -> dict:
+           model: str | None = None, extra_context: str = "", cache=None,
+           pii: bool = True, pii_map: dict | None = None) -> dict:
     """История — список {'role': 'user'|'assistant', 'content': str}.
 
     `cache` — хранилище с методами `cache_get` / `cache_put` (ADR-0017) либо
     None. По умолчанию кэша нет: прогон эталонных диалогов обязан каждый раз
     спрашивать модель, иначе приёмка начнёт подтверждать сама себя.
+
+    `pii` — шлюз персональных данных (ADR-0002). Включён по умолчанию:
+    отключение должно быть осознанным действием отладки, а не забытой
+    настройкой. `pii_map` — уже известные плейсхолдеры диалога, чтобы один
+    и тот же телефон в третьей реплике назывался так же, как в первой.
     """
     from openai import OpenAI
 
@@ -622,6 +641,20 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     blocks = (f"КОНТЕКСТ:\n{context}\n\n"
               f"ЗНАНИЯ:\n{build_knowledge(records, vehicles, owner_card, no_such_id, promos)}")
 
+    # Шлюз персональных данных (ADR-0002). Закрывает всё, что видит модель:
+    # реплики собеседника, карточку владельца в блоке ЗНАНИЯ, контекст.
+    # Поиск по фикстурам уже отработал выше — он локальный, и ему нужны
+    # настоящие VIN и номера; за границу процесса уходят уже плейсхолдеры.
+    vault = Vault(pii_map or {})
+    if owner_card:
+        # Имя человека регулярным выражением не поймать, но карточку ядро
+        # собрало само и знает, где имя, а где марка автомобиля.
+        vault.add("NAME", owner_card["customer"].get("name", ""))
+        vault.add("PHONE", owner_card["customer"].get("phone", ""))
+    if pii:
+        blocks = vault.hide(blocks)
+        history = [{"role": m["role"], "content": vault.hide(m["content"])} for m in history]
+
     messages = [{"role": "system", "content": system_prompt(role)},
                 {"role": "system", "content": blocks}] + history
 
@@ -646,6 +679,22 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                               "менеджеру, с вами свяжутся в рабочее время.",
                       "mode": "ЭСКАЛАЦИЯ (пустой ответ модели)",
                       "records": [r.get("id") for r in records], "violations": []}, role)
+
+    # Обратный путь шлюза: клиент видит свой VIN, а не «{{VIN_1}}».
+    # Валидатор работает уже по развёрнутому тексту — по тому самому, который
+    # уйдёт человеку.
+    if pii:
+        text = vault.show(text)
+        broken = vault.leftovers(text)
+        if broken:
+            # Модель испортила плейсхолдер: вернула «{{VIN_2}}», которого нет
+            # в словаре. Отправить скобки клиенту хуже, чем передать человеку.
+            print(f"[шлюз ПДн] неизвестные плейсхолдеры в ответе: {', '.join(broken)}")
+            return stamp({"text": "Передаю обращение профильному специалисту — "
+                                  "он свяжется с вами.",
+                          "mode": "ЭСКАЛАЦИЯ (испорченный плейсхолдер)",
+                          "records": [r.get("id") for r in records],
+                          "violations": [], "blocked": text}, role)
 
     violations = validate_outgoing(text)
     if violations:

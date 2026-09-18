@@ -59,7 +59,9 @@ KB = ROOT / "docs" / "knowledge-base"
 
 ROLE_FILES = {"sales": "sales.json", "service": "service.json", "hr": "hr.json"}
 
-NUMBER_RE = re.compile(r"\d[\d   ]*\d|\d")
+# Пробел разделяет разряды только между группами ровно по три цифры: иначе
+# «Aurora X5 2024» превращается в число 52024 и попадает в отчёт как выдумка.
+NUMBER_RE = re.compile(r"(?<!\d)\d{1,3}(?:[   ]\d{3})+(?!\d)|\d+")
 
 
 def known_numbers() -> set[int]:

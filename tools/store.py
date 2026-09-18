@@ -134,54 +134,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
-# --- Псевдонимизация -------------------------------------------------------
-
-# Порядок важен: телефонный шаблон находит одиннадцать цифр и внутри VIN.
-# Сначала распознаётся длинное и структурное, потом свободное.
-PII_PATTERNS = [
-    ("VIN", re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b", re.I)),
-    ("EMAIL", re.compile(r"\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b", re.I)),
-    ("PLATE", re.compile(r"\b[авекмнорстухabekmhopctyx]\s?\d{3}\s?[авекмнорстухabekmhopctyx]{2}"
-                         r"\s?\d{2,3}\b", re.I)),
-    ("PHONE", re.compile(r"(?:\+7|\+?\d{1,3}|8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}")),
-]
-
-
-def pseudonymize(text: str, known: dict[str, str] | None = None) -> tuple[str, dict[str, str]]:
-    """Заменяет ПДн плейсхолдерами. Возвращает текст и карту «плейсхолдер → значение».
-
-    Одно и то же значение в пределах диалога получает один и тот же
-    плейсхолдер: иначе один телефон, названный дважды, выглядел бы в
-    выгрузке как два разных человека.
-    """
-    mapping = dict(known or {})
-    back = {value: key for key, value in mapping.items()}
-    counters: dict[str, int] = {}
-    for placeholder in mapping:
-        kind = placeholder.strip("{}").rsplit("_", 1)[0]
-        counters[kind] = max(counters.get(kind, 0),
-                             int(placeholder.strip("{}").rsplit("_", 1)[1]))
-
-    def swap(kind: str, match: re.Match) -> str:
-        value = match.group(0)
-        if value in back:
-            return back[value]
-        counters[kind] = counters.get(kind, 0) + 1
-        placeholder = "{{%s_%d}}" % (kind, counters[kind])
-        mapping[placeholder] = value
-        back[value] = placeholder
-        return placeholder
-
-    out = text
-    for kind, pattern in PII_PATTERNS:
-        out = pattern.sub(lambda m, k=kind: swap(k, m), out)
-    return out, mapping
-
-
-def restore(text: str, mapping: dict[str, str]) -> str:
-    for placeholder, value in mapping.items():
-        text = text.replace(placeholder, value)
-    return text
+# Псевдонимизация вынесена в pii.py: тот же словарь значений работает и на
+# пути к модели (ADR-0002), и при сохранении. Обезличивание должно быть
+# одинаковым, иначе в базе и в запросе к модели окажутся разные тексты.
+from pii import Vault, pseudonymize, restore  # noqa: E402,F401
 
 
 # --- Контакты и диалоги ----------------------------------------------------
