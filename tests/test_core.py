@@ -20,9 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from assistant import (active_promotions, expand_days, humanize_ids,  # noqa: E402
-                       looks_like_vehicle_id, phone_note, plate_note, validate_outgoing,
-                       working_hours)
+from assistant import (active_promotions, expand_days, guess_mode,  # noqa: E402
+                       humanize_ids, looks_like_vehicle_id, phone_note, plate_note,
+                       split_mode, validate_outgoing, working_hours)
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -139,9 +139,37 @@ def test_schedule_and_promotions() -> None:
     check(not active_promotions("2027-01-01"), "через год не действует ни одна акция")
 
 
+def test_mode_contract() -> None:
+    """Режим, выбранный ассистентом, обязан доходить до кода и не доходить до клиента.
+
+    Регресс живой проверки 19 сентября: ассистент писал клиенту «передаю
+    менеджеру по качеству», ядро помечало ответ как ОТВЕТ, дежурному не
+    приходило ничего. Обещание без адресата хуже отсутствия эскалации.
+    """
+    text, mode = split_mode("Передаю обращение руководителю сервиса.\n#РЕЖИМ: ЭСКАЛАЦИЯ")
+    check(mode == "ЭСКАЛАЦИЯ", "объявленный режим прочитан")
+    check("РЕЖИМ" not in text, "служебная строка снята перед отправкой клиенту")
+    check(text.endswith("сервиса."), "текст ответа не пострадал")
+
+    _, mode = split_mode("Записал вас на 21 сентября.\nРЕЖИМ: ОТВЕТ")
+    check(mode == "ОТВЕТ", "строка читается и без решётки")
+
+    text, mode = split_mode("Уточните VIN, пожалуйста.")
+    check(mode is None, "молчание о режиме не выдумывается за ассистента")
+    check(text == "Уточните VIN, пожалуйста.", "текст без строки режима не тронут")
+
+    # Страховка на случай, когда контракт нарушен: сработавшая запись карты
+    # эскалаций плюс формулировка передачи.
+    check(guess_mode("Передаю обращение руководителю сервиса.", ["ESC-003"]) == "ЭСКАЛАЦИЯ",
+          "эскалация угадана по записи и формулировке")
+    check(guess_mode("Стоимость ТО-2 — 18 900 рублей.", []) == "ОТВЕТ",
+          "обычный ответ не превращается в эскалацию")
+
+
 def main() -> int:
     for test in (test_red_lines, test_false_positives, test_identifiers,
-                 test_service_codes, test_schedule_and_promotions):
+                 test_service_codes, test_schedule_and_promotions,
+                 test_mode_contract):
         test()
     print(f"Проверок выполнено: {passed + len(failed)}")
     if failed:

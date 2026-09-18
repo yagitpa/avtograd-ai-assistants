@@ -40,6 +40,7 @@ import httpx  # noqa: E402
 
 from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, answer, load_env  # noqa: E402
 from ops_console import (env_ops_ids, handle_ops, notify_operators,  # noqa: E402
+                         relay_to_operator,
                          release_stale)
 from ports import FixtureCrm  # noqa: E402
 from store import Store  # noqa: E402
@@ -193,11 +194,15 @@ def handle_client(bot: Bot, upd: dict) -> None:
         print(f"[{bot.label}] повтор доставки {message_id}, ответ не пересчитываю")
         return
 
-    # Диалог забрал человек — ассистент молчит до явного возврата (ADR-0004).
+    # Диалог забрал человек — ассистент молчит до явного возврата (ADR-0004),
+    # но реплика клиента уходит тому, кто держит диалог: молчание ассистента
+    # не должно превращаться в глухоту оператора.
     if bot.store.owner_of(dialog_id) != "bot_owned":
         bot.store.add_message(dialog_id, "in", text, route=bot.store.route_of(dialog_id),
                               channel_message_id=message_id)
-        print(f"[{bot.label}] диалог {dialog_id} ведёт человек — молчу")
+        delivered = relay_to_operator(REGISTRY.get("telegram-ops"), bot.store, dialog_id, text)
+        print(f"[{bot.label}] диалог {dialog_id} ведёт человек — молчу"
+              + ("" if delivered else "; оператору не доставлено"))
         return
 
     if text.startswith("/start"):

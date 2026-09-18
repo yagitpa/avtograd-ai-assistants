@@ -125,6 +125,32 @@ def test_take_and_relay() -> None:
     check(row["mode"].startswith("ЧЕЛОВЕК"), "в записи видно, что отвечал человек")
 
 
+def test_client_reaches_operator() -> None:
+    """Перехват обязан работать в обе стороны.
+
+    Регресс живой проверки 19 сентября: оператор забрал диалог, написал
+    клиенту, клиент ответил — и ответ осел в базе. Ассистент молчал по праву
+    владения, оператор не видел ни слова. Клиент разговаривал с пустотой.
+    """
+    store, dialog, ops, _client = scene()
+    ops_console.handle_ops(ops, upd_callback(501, f"take:{dialog}"))
+    ops.sent.clear()
+
+    delivered = ops_console.relay_to_operator(ops, store, dialog, "Стук тот же, что и в прошлый раз")
+    check(delivered, "реплика клиента доставлена")
+    check(ops.sent[-1][0] == 501, "доставлена именно тому, кто держит диалог")
+    check("Стук тот же" in ops.last(), "текст клиента передан дословно")
+    check(str(dialog) in ops.last(), "в пересылке виден номер диалога")
+
+    check(store.holder_of(dialog) == "501", "держатель диалога определяется по номеру")
+    ops_console.handle_ops(ops, upd_message(501, "/done"))
+    check(store.holder_of(dialog) is None, "после возврата держателя нет")
+    ops.sent.clear()
+    check(not ops_console.relay_to_operator(ops, store, dialog, "И ещё вопрос"),
+          "диалог у ассистента — оператору ничего не шлётся")
+    check(not ops.sent, "лишнего сообщения дежурному не ушло")
+
+
 def test_one_dialog_one_owner() -> None:
     store, dialog, ops, _client = scene()
     ops_console.handle_ops(ops, upd_callback(501, f"take:{dialog}"))
@@ -174,6 +200,7 @@ def test_message_without_dialog() -> None:
 def main() -> int:
     for test in (test_card_goes_to_operators, test_take_and_relay, test_one_dialog_one_owner,
                  test_stranger_gets_silence, test_done_returns_dialog,
+                 test_client_reaches_operator,
                  test_stale_hold_released, test_message_without_dialog):
         test()
     print(f"Проверок выполнено: {passed + len(failed)}")

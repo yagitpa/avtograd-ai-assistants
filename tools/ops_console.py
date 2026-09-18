@@ -112,6 +112,24 @@ def relay_to_client(bots, store, dialog_id: int, text: str, operator: str) -> bo
     return True
 
 
+def relay_to_operator(bot, store, dialog_id: int, text: str) -> bool:
+    """Пересылает реплику клиента тому, кто держит диалог.
+
+    Без этой пересылки перехват получается односторонним: оператор
+    пишет клиенту, клиент отвечает — и ответ уходит в базу, где его
+    никто не читает. Человек разговаривает сам с собой, а клиент
+    считает, что его слышат. Ассистент в это время молчит по праву
+    владения, так что подстраховать некому.
+    """
+    if bot is None:
+        return False
+    operator = store.holder_of(dialog_id)
+    if not operator or not operator.isdigit():
+        return False
+    bot.send(int(operator), f"Клиент · диалог {dialog_id}:\n{text}")
+    return True
+
+
 def handle_ops(bot, upd: dict) -> None:
     store = bot.store
     bots = bot.registry

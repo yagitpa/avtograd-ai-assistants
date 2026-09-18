@@ -276,6 +276,19 @@ class Store:
         row = self.conn.execute("SELECT owner FROM dialog WHERE id = ?", (dialog_id,)).fetchone()
         return row["owner"] if row else "bot_owned"
 
+    def holder_of(self, dialog_id: int) -> str | None:
+        """Кто держит диалог. None — диалог у ассистента.
+
+        Обратная сторона held_dialog: там ищут диалог по оператору,
+        здесь оператора по диалогу — чтобы знать, кому пересылать
+        реплики клиента, пока тот разговаривает с человеком.
+        """
+        row = self.conn.execute(
+            "SELECT owner, owner_by FROM dialog WHERE id = ?", (dialog_id,)).fetchone()
+        if row and row["owner"] == "human_owned":
+            return row["owner_by"]
+        return None
+
     def take_over(self, dialog_id: int, by: str) -> None:
         """Сотрудник забирает диалог себе — ассистент немедленно замолкает.
 

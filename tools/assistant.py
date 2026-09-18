@@ -130,7 +130,12 @@ STOP_PATTERNS = {
                                   r"поставил\w*\s+в\s+очередь|записал\w*\s+(вас|на)|"
                                   r"создал\w*\s+(заявку|запись|наряд))\b|"
                                   r"(лог|переписк\w+|обращени\w+)\s+сохран[ёе]н|"
-                                  r"\b(соедин|переключ)\w*\s+вас", re.I),
+                                  r"\b(соедин|переключ)\w*\s+вас|"
+                                  # Ассистент отвечает на реплику, а не пишет сам:
+                                  # обещание прислать что-то отдельным сообщением
+                                  # не будет выполнено никогда.
+                                  r"(пришлю|отправлю|вышлю|напишу)\s+.{0,30}"
+                                  r"(следующим|отдельным|вторым)\s+сообщени", re.I),
     # Внутренние идентификаторы записей в ответе клиенту. Номер заказ-наряда
     # (wo-) не в списке намеренно: это документ, который клиент видит в ДЦ.
     "служебный идентификатор": re.compile(r"\bon_call\.\w+|\b(ACT-\d+|ESC-\d+|"
@@ -632,6 +637,37 @@ KNOWN_SUMS = known_sums()
 SUBJUNCTIVE = re.compile(r"чтобы[^.?!]{0,120}$", re.I)
 
 
+# Служебная строка режима: ассистент называет выбранную ветку явно, ядро
+# снимает её перед отправкой. Без неё решение передать обращение человеку
+# оставалось внутри текста, и карточка дежурному не создавалась.
+MODE_LINE = re.compile(r"^\s*#?\s*РЕЖИМ\s*[:：]\s*(ОТВЕТ|ЭСКАЛАЦИЯ|УТОЧНЕНИЕ|МОЛЧАНИЕ)\b.*$",
+                       re.I | re.M)
+# Признаки передачи человеку на случай, если модель строку забыла.
+HANDOVER_SAID = re.compile(r"переда[юмн]\w*|свяж[еуё]тся|соедин\w+\s+с|"
+                           r"руководител\w+\s+(сервиса|отдела)|менеджер\w*\s+по\s+качеству", re.I)
+
+
+def split_mode(text: str) -> tuple[str, str | None]:
+    """Отделяет служебную строку режима от текста для собеседника."""
+    found = MODE_LINE.search(text)
+    if not found:
+        return text.strip(), None
+    clean = MODE_LINE.sub("", text).strip()
+    return clean, found.group(1).upper()
+
+
+def guess_mode(text: str, records: list[str]) -> str:
+    """Режим по косвенным признакам, когда модель забыла его назвать.
+
+    Догадка хуже явного указания и потому логируется: если она срабатывает
+    часто, чинить надо промпт, а не расширять эвристику.
+    """
+    escalation_record = any(str(r).startswith("ESC-") for r in records)
+    if escalation_record and HANDOVER_SAID.search(text):
+        return "ЭСКАЛАЦИЯ"
+    return "ОТВЕТ"
+
+
 PRICE_SAID = re.compile(rf"{NUM4}\s*(?:₽|руб)", re.I)
 OFFER_NOTE = ("Информация не является публичной офертой; "
               "окончательные условия фиксируются договором.")
@@ -809,6 +845,15 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                           "records": [r.get("id") for r in records],
                           "violations": [], "blocked": text}, role)
 
+    # Режим, выбранный ассистентом, снимается со служебной строки. Если модель
+    # её не поставила — догадываемся по записям и формулировке, но пишем об
+    # этом в журнал: частая догадка означает, что чинить надо промпт.
+    text, declared = split_mode(text)
+    record_ids = [r.get("id") for r in records]
+    if declared is None:
+        declared = guess_mode(text, record_ids)
+        print(f"[ядро] ассистент не назвал режим, определён по признакам: {declared}")
+
     text = ensure_offer_note(text)
     violations = validate_outgoing(text)
     if violations:
@@ -817,13 +862,16 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                       "records": [r.get("id") for r in records],
                       "violations": violations, "blocked": text}, role)
 
-    result = stamp({"text": text, "mode": "ОТВЕТ", "records": [r.get("id") for r in records],
+    result = stamp({"text": text, "mode": declared, "records": record_ids,
                     "violations": []}, role)
 
     # Срок жизни привязан к источнику: ответ, опирающийся на сток, живёт не
     # дольше интервала обновления фида. Справка по регламенту живёт до смены
     # версии знаний — она и так в ключе, так что сутки здесь только верхняя
     # граница на случай правки фикстур без пересборки процесса.
-    if key:
+    # Кэшируется только справка. Эскалация и уточнение — ветки разговора, а не
+    # ответ на вопрос: выданная из кэша эскалация означала бы, что второе
+    # обращение никуда не ушло, а клиенту сказали, что ушло (ADR-0017).
+    if key and declared == "ОТВЕТ":
         cache.cache_put(key, role, last_user, result, 600 if vehicles else 86400)
     return result
