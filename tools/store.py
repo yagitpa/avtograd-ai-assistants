@@ -53,6 +53,7 @@ DIALOG_TTL_DAYS = 90
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS contact (
     id          INTEGER PRIMARY KEY,
+    dealer_id   TEXT NOT NULL DEFAULT 'avtograd',
     created_at  TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
     note        TEXT DEFAULT ''
@@ -71,8 +72,15 @@ CREATE TABLE IF NOT EXISTS channel_identity (
 CREATE TABLE IF NOT EXISTS dialog (
     id          INTEGER PRIMARY KEY,
     contact_id  INTEGER NOT NULL REFERENCES contact(id) ON DELETE CASCADE,
+    dealer_id   TEXT NOT NULL DEFAULT 'avtograd',
     channel     TEXT NOT NULL,
     route       TEXT,
+    -- Владение диалогом: bot_owned, human_owned, returning (ADR-0004).
+    -- Сотрудник, вмешавшийся в переписку, забирает диалог себе, и ассистент
+    -- замолкает до явного возврата.
+    owner       TEXT NOT NULL DEFAULT 'bot_owned',
+    owner_since TEXT,
+    owner_by    TEXT,
     opened_at   TEXT NOT NULL,
     last_at     TEXT NOT NULL,
     closed_at   TEXT
@@ -81,6 +89,9 @@ CREATE TABLE IF NOT EXISTS dialog (
 CREATE TABLE IF NOT EXISTS message (
     id          INTEGER PRIMARY KEY,
     dialog_id   INTEGER NOT NULL REFERENCES dialog(id) ON DELETE CASCADE,
+    -- Идентификатор сообщения в канале: по нему ловятся повторы, когда
+    -- Telegram или шлюз доставляют одно и то же дважды.
+    channel_message_id TEXT,
     direction   TEXT NOT NULL CHECK (direction IN ('in', 'out')),
     text        TEXT NOT NULL,
     route       TEXT,
@@ -115,13 +126,45 @@ CREATE TABLE IF NOT EXISTS answer_cache (
     hits        INTEGER NOT NULL DEFAULT 0
 );
 
+"""
+
+SCHEMA_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_message_dialog ON message(dialog_id, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_message_dedup
+    ON message(dialog_id, channel_message_id) WHERE channel_message_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_dialog_contact ON dialog(contact_id, last_at);
 """
 
 
 def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+# Столбцы, добавленные после первого запуска. `CREATE TABLE IF NOT EXISTS`
+# существующую таблицу не трогает, поэтому база, заведённая вчера, осталась
+# бы без новых полей и падала бы на первом же запросе.
+MIGRATIONS = [
+    ("contact", "dealer_id", "TEXT NOT NULL DEFAULT 'avtograd'"),
+    ("dialog", "dealer_id", "TEXT NOT NULL DEFAULT 'avtograd'"),
+    ("dialog", "owner", "TEXT NOT NULL DEFAULT 'bot_owned'"),
+    ("dialog", "owner_since", "TEXT"),
+    ("dialog", "owner_by", "TEXT"),
+    ("message", "channel_message_id", "TEXT"),
+]
+
+
+def migrate(conn: sqlite3.Connection) -> list[str]:
+    """Дописывает недостающие столбцы в уже существующую базу."""
+    applied = []
+    for table, column, decl in MIGRATIONS:
+        columns = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not columns or column in columns:
+            continue
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        applied.append(f"{table}.{column}")
+    if applied:
+        conn.commit()
+    return applied
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -131,6 +174,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    # Порядок важен: частичный индекс по channel_message_id ссылается на
+    # столбец, которого в старой базе ещё нет.
+    migrate(conn)
+    conn.executescript(SCHEMA_INDEXES)
     return conn
 
 
@@ -209,6 +256,43 @@ class Store:
         self.conn.execute("UPDATE dialog SET closed_at = ? WHERE id = ?", (now_iso(), dialog_id))
         self.conn.commit()
 
+    def owner_of(self, dialog_id: int) -> str:
+        row = self.conn.execute("SELECT owner FROM dialog WHERE id = ?", (dialog_id,)).fetchone()
+        return row["owner"] if row else "bot_owned"
+
+    def take_over(self, dialog_id: int, by: str) -> None:
+        """Сотрудник забирает диалог себе — ассистент немедленно замолкает.
+
+        Критерий приёмки этапа 4: сообщение менеджера глушит бота. Владение
+        хранится в базе, а не в памяти процесса, потому что перезапуск не
+        должен возвращать ассистенту диалог, который ведёт человек.
+        """
+        self.conn.execute(
+            "UPDATE dialog SET owner = 'human_owned', owner_since = ?, owner_by = ? WHERE id = ?",
+            (now_iso(), by, dialog_id))
+        self.conn.commit()
+
+    def release(self, dialog_id: int) -> None:
+        """Возврат диалога ассистенту — только явным действием человека."""
+        self.conn.execute(
+            "UPDATE dialog SET owner = 'bot_owned', owner_since = ?, owner_by = NULL WHERE id = ?",
+            (now_iso(), dialog_id))
+        self.conn.commit()
+
+    def seen_message(self, dialog_id: int, channel_message_id: str | None) -> bool:
+        """Было ли уже такое сообщение канала.
+
+        Telegram доставляет повторы при обрыве long polling, шлюзы делают то
+        же самое при ретраях. Без проверки клиент получал бы два ответа на
+        один вопрос и платил бы за это двумя вызовами модели.
+        """
+        if not channel_message_id:
+            return False
+        row = self.conn.execute(
+            "SELECT 1 FROM message WHERE dialog_id = ? AND channel_message_id = ?",
+            (dialog_id, str(channel_message_id))).fetchone()
+        return row is not None
+
     def set_route(self, dialog_id: int, route: str | None) -> None:
         self.conn.execute("UPDATE dialog SET route = ?, last_at = ? WHERE id = ?",
                           (route, now_iso(), dialog_id))
@@ -225,7 +309,8 @@ class Store:
 
     def add_message(self, dialog_id: int, direction: str, text: str, route: str | None = None,
                     mode: str = "", prompt_version: str = "", kb_version: str = "",
-                    records: list[str] | None = None) -> None:
+                    records: list[str] | None = None,
+                    channel_message_id: str | None = None) -> None:
         clean, mapping = pseudonymize(text, self.mapping(dialog_id))
         stamp = now_iso()
         for placeholder, value in mapping.items():
@@ -234,9 +319,11 @@ class Store:
                 "INSERT OR IGNORE INTO pii_token (dialog_id, placeholder, kind, value, created_at)"
                 " VALUES (?, ?, ?, ?, ?)", (dialog_id, placeholder, kind, value, stamp))
         self.conn.execute(
-            "INSERT INTO message (dialog_id, direction, text, route, mode, prompt_version,"
-            " kb_version, records, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (dialog_id, direction, clean, route, mode, prompt_version, kb_version,
+            "INSERT INTO message (dialog_id, channel_message_id, direction, text, route, mode,"
+            " prompt_version, kb_version, records, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (dialog_id, str(channel_message_id) if channel_message_id else None,
+             direction, clean, route, mode, prompt_version, kb_version,
              ",".join(records or []), stamp))
         self.conn.execute("UPDATE dialog SET last_at = ? WHERE id = ?", (stamp, dialog_id))
         self.conn.commit()

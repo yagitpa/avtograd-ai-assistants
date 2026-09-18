@@ -31,11 +31,31 @@ PROMPTS = ROOT / "docs" / "prompts"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pii import Vault  # noqa: E402
+from ports import DmsPort, FixtureDms, PortUnavailable, owner_card  # noqa: E402
 from versions import kb_version, prompt_version  # noqa: E402
 
 # Версии считаются один раз при импорте: процесс живёт с тем текстом промпта,
 # с которым запущен, и ответ помечается именно им (ADR-0016).
 KB_VERSION = kb_version()
+
+
+def llm_client():
+    """Клиент модели. Провайдер меняется переменными окружения, не кодом.
+
+    ADR-0005 обещает переносимость на GigaChat и YandexGPT без правки
+    промптов. Обещание держится ровно до тех пор, пока адрес провайдера
+    задаётся конфигурацией: у обоих есть OpenAI-совместимый endpoint, и
+    тогда переезд — это две строки в `.env`, а не работа с кодом.
+
+    Само обещание пока не проверено: ключей GigaChat и YandexGPT в учебном
+    контуре нет. Проверка — приёмочный тест этапа 6.
+    """
+    from openai import OpenAI
+    base = os.environ.get("AVTOGRAD_LLM_BASE", "").strip()
+    key = os.environ.get("AVTOGRAD_LLM_KEY", "").strip()
+    if base:
+        return OpenAI(base_url=base, api_key=key or os.environ.get("OPENAI_API_KEY", ""))
+    return OpenAI()
 
 
 def stamp(result: dict, role: str) -> dict:
@@ -133,8 +153,11 @@ STOP_PATTERNS = {
     "компенсация": re.compile(r"\bкомпенсир\w+|\bверн[ёе]м\s+(деньги|стоимость|средства)", re.I),
     "диагноз": re.compile(r"\bэто\s+(амортизатор\w*|насос\w*|подшипник\w*|ступиц\w+|"
                           r"сцеплени\w+|генератор\w*|стартер\w*)", re.I),
+    # «карт» без уточнения ловило «подниму карточку автомобиля» — фразу, которой
+    # ассистент как раз и должен отвечать. Запрещена банковская карта, а не
+    # карточка машины.
     "запрос документов": re.compile(r"(пришлите|отправьте|скиньте)\s+.{0,20}"
-                                    r"(паспорт\w*|снилс|инн|карт\w+|скан\w*)", re.I),
+                                    r"(паспорт\w*|снилс|инн|карт(?!очк)\w*|скан\w*)", re.I),
     # Отрицание снимает запрет: «не гарантирую одобрение» — рекомендованная
     # замена из стоп-листа, а не нарушение.
     "абсолютное обещание": re.compile(r"(?<!не )\b(гарантирую|обещаю|100\s*%|точно\s+будет|"
@@ -296,27 +319,36 @@ def find_vehicles(query: str, limit: int = 5) -> list[dict]:
     return hits[:limit]
 
 
-def find_owner_vehicle(query: str) -> dict | None:
+def extract_ids(query: str) -> tuple[str, str]:
+    """Достаёт из реплики VIN и госномер, если они там есть."""
+    upper = query.upper()
+    vin = ""
+    match = re.search(r"\b[A-HJ-NPR-Z0-9]{17}\b", upper)
+    if match:
+        vin = match.group(0)
+    plate = ""
+    match = PLATE_SHAPE.search(upper)
+    if match and not plate_note(query):
+        plate = "".join(match.groups())
+    return vin, plate
+
+
+def find_owner_vehicle(query: str, dms: DmsPort | None = None) -> dict | None:
     """Карточка машины клиента по VIN или госномеру — с историей заказ-нарядов.
 
-    Без этого сервисный ассистент видел только сток, то есть машины на продажу,
-    и на VIN клиента отвечал «принял, поднимаю карточку», не имея карточки.
+    Ходит через порт DMS, а не читает фикстуры напрямую (ADR-0003): когда
+    на месте фикстуры окажется 1С:Альфа-Авто, ядро не изменится. Порт может
+    не ответить — тогда исключение уходит наверх, потому что «нет такой
+    машины» и «не смог спросить» это разные ответы клиенту.
+
+    Без этой карточки сервисный ассистент видел только сток, то есть машины
+    на продажу, и на VIN клиента отвечал «принял, поднимаю карточку», не
+    имея карточки.
     """
-    q = query.lower().replace(" ", "")
-    vehicles = load_json("vehicles.json")["vehicles"]
-    found = None
-    for v in vehicles:
-        plate = v.get("plate", "").lower().replace(" ", "")
-        if v["vin"].lower() in q or (plate and plate in q):
-            found = v
-            break
-    if not found:
+    vin, plate = extract_ids(query)
+    if not vin and not plate:
         return None
-    orders = [o for o in load_json("work_orders.json")["work_orders"]
-              if o["vehicle_id"] == found["id"]]
-    customers = {c["id"]: c for c in load_json("customers.json")["customers"]}
-    return {"vehicle": found, "orders": orders,
-            "customer": customers.get(found.get("customer_id"), {})}
+    return owner_card(dms or FixtureDms(), vin=vin, plate=plate)
 
 
 def looks_like_vehicle_id(query: str) -> bool:
@@ -638,7 +670,8 @@ def validate_outgoing(text: str) -> list[str]:
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
            model: str | None = None, extra_context: str = "", cache=None,
-           pii: bool = True, pii_map: dict | None = None) -> dict:
+           pii: bool = True, pii_map: dict | None = None,
+           dms: DmsPort | None = None) -> dict:
     """История — список {'role': 'user'|'assistant', 'content': str}.
 
     `cache` — хранилище с методами `cache_get` / `cache_put` (ADR-0017) либо
@@ -666,8 +699,20 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     # Машина клиента и её наряды — для сервиса; сток тут не поможет.
     # Имя owner_card, а не owner: owner — это владение диалогом. Его затирание
     # отправляло в КОНТЕКСТ «владение: None», и ассистент по инварианту молчал.
-    owner_card = find_owner_vehicle(last_user) if role == "service" else None
-    no_such_id = bool(role == "service" and not owner_card and looks_like_vehicle_id(last_user))
+    dms_down = False
+    card = None
+    if role == "service":
+        try:
+            card = find_owner_vehicle(last_user, dms=dms)
+        except PortUnavailable as exc:
+            # Уровень L1 из лестницы деградации: внешняя система молчит.
+            # Клиент получает честное «не могу поднять карточку сейчас»,
+            # а не выдуманный статус и не отсутствие ответа.
+            print(f"[порт DMS] {exc}")
+            dms_down = True
+    owner_card = card
+    no_such_id = bool(role == "service" and not owner_card and not dms_down
+                      and looks_like_vehicle_id(last_user))
     promos = active_promotions(now.strftime("%Y-%m-%d")) if role == "sales" else None
     # Оговорка засчитывается сказанной, как только ассистент её произнёс.
     HOURS_MARKS = ("нерабоч", "не работает", "в очередь", "рабочий интервал",
@@ -698,8 +743,16 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                 return stamp({"text": hit["text"], "mode": hit["mode"],
                               "records": hit["records"], "violations": [],
                               "cached": True}, role)
-    blocks = (f"КОНТЕКСТ:\n{context}\n\n"
-              f"ЗНАНИЯ:\n{build_knowledge(records, vehicles, owner_card, no_such_id, promos)}")
+    knowledge = build_knowledge(records, vehicles, owner_card, no_such_id, promos)
+    if dms_down:
+        # Уровень L1: внешняя система молчит. Клиенту говорится об этом прямо,
+        # без выдуманного статуса и без молчания в ответ.
+        knowledge = ("ДОСТУПНОСТЬ: система обслуживания сейчас не отвечает. Карточку "
+                     "автомобиля и историю нарядов поднять невозможно. Сказать об этом "
+                     "прямо, статус и сроки не называть, предложить передать мастеру."
+                     + chr(10) + chr(10) + knowledge)
+    blocks = ("КОНТЕКСТ:" + chr(10) + context + chr(10) + chr(10)
+              + "ЗНАНИЯ:" + chr(10) + knowledge)
 
     # Шлюз персональных данных (ADR-0002). Закрывает всё, что видит модель:
     # реплики собеседника, карточку владельца в блоке ЗНАНИЯ, контекст.
@@ -718,7 +771,7 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     messages = [{"role": "system", "content": system_prompt(role)},
                 {"role": "system", "content": blocks}] + history
 
-    client = OpenAI()
+    client = llm_client()
 
     # Модель изредка тратит весь бюджет на размышления и возвращает пустой текст.
     # Молчание в ответ клиенту неотличимо от поломки, поэтому одна повторная

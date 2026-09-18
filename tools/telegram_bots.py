@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import httpx  # noqa: E402
 
 from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, answer, load_env  # noqa: E402
+from ports import FixtureCrm  # noqa: E402
 from store import Store  # noqa: E402
 
 load_env()
@@ -95,6 +96,7 @@ class Bot:
         self.client = httpx.Client(timeout=70)
         # Своё подключение к базе на каждый бот: боты живут в разных потоках.
         self.store = Store()
+        self.crm = FixtureCrm()
 
     def call(self, method: str, **payload):
         try:
@@ -175,6 +177,19 @@ def handle_client(bot: Bot, upd: dict) -> None:
                                     who.get("username", ""))
     dialog_id = bot.store.current_dialog(contact_id, bot.channel)
 
+    # Повтор доставки: Telegram присылает то же сообщение при обрыве polling.
+    message_id = str(msg.get("message_id", "")) or None
+    if bot.store.seen_message(dialog_id, message_id):
+        print(f"[{bot.label}] повтор доставки {message_id}, ответ не пересчитываю")
+        return
+
+    # Диалог забрал человек — ассистент молчит до явного возврата (ADR-0004).
+    if bot.store.owner_of(dialog_id) != "bot_owned":
+        bot.store.add_message(dialog_id, "in", text, route=bot.store.route_of(dialog_id),
+                              channel_message_id=message_id)
+        print(f"[{bot.label}] диалог {dialog_id} ведёт человек — молчу")
+        return
+
     if text.startswith("/start"):
         bot.store.close_dialog(dialog_id)
         bot.send(chat_id, GREETING, keyboard=MENU)
@@ -197,7 +212,8 @@ def handle_client(bot: Bot, upd: dict) -> None:
 
     chosen = decision["route"]
     bot.store.set_route(dialog_id, chosen)
-    bot.store.add_message(dialog_id, "in", text, route=chosen)
+    bot.store.add_message(dialog_id, "in", text, route=chosen,
+                          channel_message_id=message_id)
 
     history = bot.store.history(dialog_id, limit=HISTORY_LIMIT, route=chosen)
 
@@ -210,6 +226,11 @@ def handle_client(bot: Bot, upd: dict) -> None:
 
     if not result["text"]:
         return
+    if result.get("mode", "").startswith("ЭСКАЛАЦИЯ"):
+        # Обещание «передам менеджеру» подкрепляется записью в CRM-исходящих.
+        bot.crm.handover({"dialog_id": dialog_id, "contact_id": contact_id,
+                          "route": chosen, "reason": result["mode"],
+                          "channel": bot.channel})
     bot.send(chat_id, result["text"])
     bot.store.add_message(dialog_id, "out", result["text"], route=chosen,
                           mode=result.get("mode", ""),
