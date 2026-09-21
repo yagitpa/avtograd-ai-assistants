@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import sys
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,15 +59,28 @@ def prompt_versions() -> dict[str, str]:
     return {role: prompt_version(role) for role in ROLE_FILES}
 
 
+# Поля, которые меняются сами и знанием не являются. Время выгрузки стока —
+# отметка свежести, а не факт о машинах: от него ответ не меняется, меняется
+# только право на него отвечать, и это отдельный признак (`stale`).
+#
+# Без этого исключения версия знаний менялась каждые десять минут — при
+# каждой синхронизации фида. А версия входит в ключ кэша, значит кэш,
+# заведённый ради экономии (ADR-0017), протухал целиком с той же частотой
+# и не экономил ничего.
+VOLATILE = re.compile(r'"generated_at"\s*:\s*"[^"]*"')
+
+
 def kb_version() -> str:
     """Версия слоя знаний: записи и фикстуры вместе.
 
     Фикстуры входят в версию, потому что ответ меняется и от них: цена в
     стоке правится без единого слова в промпте, а клиент видит другой ответ.
+    Самообновляющиеся отметки времени — не входят.
     """
     files = sorted(list(KB.rglob("*.md")) + list(KB.rglob("*.json"))
                    + list(KB.rglob("*.csv")), key=lambda p: str(p).lower())
-    return digest(*(f.read_text(encoding="utf-8") for f in files))
+    return digest(*(VOLATILE.sub('"generated_at": ""', f.read_text(encoding="utf-8"))
+                    for f in files))
 
 
 def changelog_versions() -> set[str]:

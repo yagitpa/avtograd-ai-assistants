@@ -5,7 +5,7 @@
   "feed": {
     "source": "fixtures/stock.csv",
     "refresh_minutes": 10,
-    "generated_at": "2026-09-21T20:25:43+08:00",
+    "generated_at": "2026-09-21T21:20:04+08:00",
     "stale_after_hours": 4,
     "on_stale": "Ассистент отказывается отвечать по наличию и статусу, предлагает связь с менеджером",
     "test_modes": {
