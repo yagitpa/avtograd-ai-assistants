@@ -49,6 +49,30 @@ class Report:
         return [r for r in self.rows if r[0] == BAD]
 
 
+def local_get(url: str, timeout: float = 10, **kwargs):
+    """Запрос к своему же процессу в обход прокси из окружения.
+
+    У владельца стенда в окружении стоит HTTP_PROXY на 127.0.0.1:10809 с
+    исключением для localhost. Исключение соблюдается не всегда — при
+    перезапуске прокси обращение к собственному ядру уходило через него и
+    возвращало чужую страницу вместо ответа сервиса.
+
+    Проверка петлевого адреса не должна зависеть от того, как настроен
+    выход в интернет. `trust_env=False` снимает вопрос целиком — в отличие
+    от обращений к Telegram, которым прокси как раз может быть нужен.
+    """
+    import httpx
+
+    with httpx.Client(trust_env=False, timeout=timeout) as client:
+        return client.get(url, **kwargs)
+
+
+def describe(response) -> str:
+    """Чем ответил не тот, кого спрашивали."""
+    kind = response.headers.get("content-type", "тип неизвестен").split(";")[0]
+    return f"код {response.status_code}, {kind}"
+
+
 def check_env(rep: Report) -> None:
     """Наличие, не значения. Секреты не печатаются даже частично."""
     needed = {
@@ -80,16 +104,22 @@ def check_env(rep: Report) -> None:
 
 
 def check_core(rep: Report) -> None:
-    import httpx
-
     port = os.environ.get("AVTOGRAD_API_PORT", "8080")
     url = f"http://127.0.0.1:{port}/v1/health"
     try:
-        r = httpx.get(url, timeout=5)
-        body = r.json()
+        r = local_get(url, timeout=5)
     except Exception as exc:
-        rep.add(BAD, "HTTP-ядро", f"{type(exc).__name__} на {url}",
+        rep.add(BAD, "HTTP-ядро", f"не отвечает на {port} ({type(exc).__name__})",
                 "запустите: python tools/api.py")
+        return
+
+    # Ответ пришёл — значит, на порту кто-то есть. Если это не ядро, совет
+    # «запустите ядро» уводит в сторону: запускать нечего, порт уже занят.
+    try:
+        body = r.json()
+    except ValueError:
+        rep.add(BAD, "HTTP-ядро", f"на {port} отвечает не ядро ({describe(r)})",
+                "проверьте, не занят ли порт другим сервисом или прокси")
         return
 
     rep.add(OK, "HTTP-ядро", f"отвечает на {port}")
@@ -175,9 +205,15 @@ def check_scene(rep: Report) -> None:
                 "либо пропустите этот пункт, либо напишите боту и не отвечайте сутки")
 
 
-def check_n8n(rep: Report) -> None:
+def _proxied_get(url: str, timeout: float = 10, **kwargs):
+    """Обычный клиент: прокси из окружения соблюдается."""
     import httpx
 
+    with httpx.Client(timeout=timeout) as client:
+        return client.get(url, **kwargs)
+
+
+def check_n8n(rep: Report) -> None:
     base = (os.environ.get("N8N_BASE_URL") or "").rstrip("/")
     key = os.environ.get("N8N_API_KEY", "").strip()
     if not base or not key:
@@ -187,17 +223,21 @@ def check_n8n(rep: Report) -> None:
     # это мегабайты. На коротком таймауте ответ не дочитывается, и httpx
     # падает с JSONDecodeError — который читается как «n8n недоступен»,
     # хотя n8n в полном порядке. Минута вместо пятнадцати секунд.
+    # Тем же способом: n8n у владельца стоит на localhost, и прокси ему
+    # не нужен. Внешний адрес (ngrok) пойдёт через обычного клиента.
+    is_local = any(host in base for host in ("127.0.0.1", "localhost", "[::1]"))
+    getter = local_get if is_local else _proxied_get
     try:
-        r = httpx.get(f"{base}/api/v1/workflows", params={"limit": 250}, timeout=60,
-                      headers={"X-N8N-API-KEY": key, "ngrok-skip-browser-warning": "1"})
+        r = getter(f"{base}/api/v1/workflows", timeout=60,
+                   params={"limit": 250},
+                   headers={"X-N8N-API-KEY": key, "ngrok-skip-browser-warning": "1"})
     except Exception as exc:
         rep.add(WARN, "n8n", f"{type(exc).__name__} — инсталляция не отвечает")
         return
     try:
         data = r.json().get("data", [])
     except ValueError:
-        rep.add(WARN, "n8n", f"ответ не разобран (код {r.status_code}, "
-                f"{r.headers.get('content-type', 'тип неизвестен')})",
+        rep.add(WARN, "n8n", f"ответил не n8n ({describe(r)})",
                 "проверьте N8N_BASE_URL и ключ")
         return
     names = [w["name"] for w in data if w["name"].startswith(("01.", "02.", "03.", "04."))]
