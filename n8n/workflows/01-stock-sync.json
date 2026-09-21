@@ -28,7 +28,7 @@
             {
               "id": "core",
               "name": "core",
-              "value": "http://localhost:8080",
+              "value": "http://127.0.0.1:8080",
               "type": "string"
             }
           ]
@@ -42,7 +42,9 @@
       "position": [
         220,
         300
-      ]
+      ],
+      "notes": "127.0.0.1, а не localhost: Node разрешает localhost в IPv6 ::1, а ядро слушает IPv4 — соединение отвергается с EACCES",
+      "notesInFlow": false
     },
     {
       "parameters": {

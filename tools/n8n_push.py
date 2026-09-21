@@ -75,6 +75,45 @@ def payload(doc: dict) -> dict:
             "connections": doc["connections"], "settings": doc.get("settings", {})}
 
 
+CRED_NAME_HINT = "автоград"
+
+
+def core_credential(http) -> dict | None:
+    """Учётная запись с ключом ядра, найденная по имени.
+
+    Ищется по подстроке и без учёта регистра: имя вводит человек, и «АвтоГрад
+    — Ядро» через тире вместо дефиса не повод падать. Значение ключа сюда не
+    приезжает — API n8n отдаёт только идентификатор, имя и тип.
+    """
+    r = http.get("/api/v1/credentials")
+    if r.status_code >= 400:
+        return None
+    for cred in r.json().get("data", []):
+        if cred.get("type") == "httpHeaderAuth" and CRED_NAME_HINT in cred["name"].lower():
+            return {"id": cred["id"], "name": cred["name"]}
+    return None
+
+
+def bind(nodes: list[dict], cred: dict | None) -> int:
+    """Прописывает учётку узлам, которые ходят в ядро, и только им.
+
+    Признак — адрес, собранный из узла «Настройки». Узел, который забирает
+    фид у дилера, ключа ядра не получает: секрет не должен уезжать туда,
+    где он не нужен, даже если адрес выглядит безобидно.
+    """
+    if not cred:
+        return 0
+    touched = 0
+    for node in nodes:
+        if not node.get("type", "").endswith("httpRequest"):
+            continue
+        if "Настройки" not in str(node.get("parameters", {}).get("url", "")):
+            continue
+        node["credentials"] = {"httpHeaderAuth": cred}
+        touched += 1
+    return touched
+
+
 def cmd_list(http) -> int:
     existing = remote(http)
     if not existing:
@@ -89,8 +128,14 @@ def cmd_list(http) -> int:
 
 def cmd_push(http) -> int:
     existing = remote(http)
+    cred = core_credential(http)
+    if cred:
+        print(f"Учётная запись ядра: «{cred['name']}» — пропишу узлам, ходящим в ядро.")
+    else:
+        print("Учётной записи с «АвтоГрад» в имени нет — узлы останутся без ключа.")
     for path, doc in local():
         body = payload(doc)
+        wired = bind(body["nodes"], cred)
         found = existing.get(doc["name"])
         if found:
             r = http.put(f"/api/v1/workflows/{found['id']}", json=body)
@@ -101,11 +146,16 @@ def cmd_push(http) -> int:
         if r.status_code >= 400:
             print(f"  · {doc['name']}: ОШИБКА {r.status_code} · {r.text[:200]}")
             continue
-        print(f"  · {doc['name']} — {verb} (выключен), из {path.name}")
-    print("\nОстаётся два шага руками, и оба намеренно:")
-    print("  1. Учётная запись Header Auth: имя заголовка X-API-Key, "
-          "значение — AVTOGRAD_API_KEY из .env. Секрет вводите вы, а не код.")
-    print("  2. Включить сценарии, посмотрев на расписание.")
+        print(f"  · {doc['name']} — {verb} (выключен), "
+              f"узлов с ключом {wired}, из {path.name}")
+    if not cred:
+        print("\nУзлы остались без ключа. Создайте учётную запись Header Auth:\n"
+              "  имя заголовка  X-API-Key\n"
+              "  значение       AVTOGRAD_API_KEY из .env\n"
+              "  название       со словом «АвтоГрад»\n"
+              "Секрет вводите вы, а не код. Затем повторите push.")
+    print("\nСценарии залиты выключенными: расписание включает человек, "
+          "посмотрев на него.")
     return 0
 
 
