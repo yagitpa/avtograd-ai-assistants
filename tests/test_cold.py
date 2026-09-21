@@ -196,6 +196,19 @@ def test_boundary_scanner_catches_leaks() -> None:
     check(not check_boundary.scan(clean, names),
           "на честном ответе ядра сканер молчит")
 
+    # Оба ложных класса найдены на первом живом журнале n8n. Сканер, кричащий
+    # на каждую метку времени и каждый хеш, хуже отсутствующего: к нему
+    # привыкают и перестают читать, а настоящая утечка тонет в шуме.
+    check(not check_boundary.scan('{"startTime": 1789994813652}', names),
+          "unix-время в миллисекундах не читается как телефон")
+    check(not check_boundary.scan(
+              '{"resumeToken": "4d1b696c4fc81606763771dabe6ba1dc591cacb1"}', names),
+          "шестнадцатеричный токен не читается как телефон")
+    check(check_boundary.scan('звоните 8 (999) 481-36-61', names),
+          "настоящий телефон в скобках всё ещё ловится")
+    check(check_boundary.scan('тел. 89161234567 для связи', names),
+          "телефон слитно всё ещё ловится")
+
 
 def main() -> int:
     for test in (test_feed_freshness, test_sync_rejects_bad_feed,

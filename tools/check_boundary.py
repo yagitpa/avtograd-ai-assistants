@@ -43,8 +43,16 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
+# Границы слова обязательны, и именно слова, а не разряда. Два ложных класса,
+# найденные на первом же живом журнале:
+#
+#   1789994813661                      unix-время в мс — внутри читается «8 999 481 36 61»
+#   4d1b696c4fc81606763771dabe6ba1dc   resumeToken n8n — тот же фокус, но соседи буквы
+#
+# Проверка, кричащая на каждую временную метку и каждый хеш, хуже отсутствующей:
+# к ней привыкают и перестают читать. Ловушки заперты в tests/test_cold.py.
 PATTERNS = {
-    "телефон": re.compile(r"(?:\+7|8)[\s(\-]*\d{3}[\s)\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}"),
+    "телефон": re.compile(r"(?<!\w)(?:\+7|8)[\s(\-]*\d{3}[\s)\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\w)"),
     "VIN": re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b"),
     "e-mail": re.compile(r"\b[\w.\-]+@[\w\-]+\.[a-zA-Zа-яА-Я]{2,}\b"),
     "госномер": re.compile(r"\b[АВЕКМНОРСТУХABEKMHOPCTYX]\s?\d{3}\s?"
@@ -86,7 +94,13 @@ def scan(text: str, names: set[str]) -> list[tuple[str, str]]:
     return found
 
 
-def from_api(limit: int = 100) -> list[dict]:
+# Наши сценарии узнаются по нумерованному имени. Инсталляция заказчика живёт
+# своей жизнью: там есть сценарии, которые работают с телефонами совершенно
+# законно. Аудит чужого контура — не предмет ADR-0002 и не наше дело.
+OURS = ("01.", "02.", "03.", "04.")
+
+
+def from_api(limit: int = 100, only_ours: bool = True) -> tuple[list[dict], dict[str, str]]:
     """Выполнения из n8n. Ключ берётся из окружения и не печатается."""
     import httpx
 
@@ -96,11 +110,20 @@ def from_api(limit: int = 100) -> list[dict]:
         raise SystemExit("Нет N8N_BASE_URL или N8N_API_KEY в окружении — "
                          "либо задайте их в .env, либо передайте файл выгрузки.")
     headers = {"X-N8N-API-KEY": key, "ngrok-skip-browser-warning": "1"}
-    with httpx.Client(timeout=30, headers=headers, follow_redirects=True) as client:
+    with httpx.Client(timeout=60, headers=headers, follow_redirects=True) as client:
+        flows = client.get(f"{base}/api/v1/workflows", params={"limit": 250})
+        flows.raise_for_status()
+        names = {w["id"]: w["name"] for w in flows.json().get("data", [])}
+
         listing = client.get(f"{base}/api/v1/executions",
                              params={"limit": limit, "includeData": "true"})
         listing.raise_for_status()
-        return listing.json().get("data", [])
+        runs = listing.json().get("data", [])
+
+    if only_ours:
+        runs = [r for r in runs
+                if names.get(r.get("workflowId"), "").startswith(OURS)]
+    return runs, names
 
 
 def from_file(path: Path) -> list[dict]:
@@ -112,11 +135,17 @@ def from_file(path: Path) -> list[dict]:
 
 def main() -> int:
     load_env()
+    args = [a for a in sys.argv[1:] if a != "--all"]
+    only_ours = "--all" not in sys.argv
     names = known_names()
-    source = sys.argv[1] if len(sys.argv) > 1 else None
-    executions = from_file(Path(source)) if source else from_api()
 
-    print(f"Выполнений проверено: {len(executions)} · "
+    if args:
+        executions, flows = from_file(Path(args[0])), {}
+    else:
+        executions, flows = from_api(only_ours=only_ours)
+
+    scope = "сценарии холодного контура" if only_ours else "весь журнал n8n"
+    print(f"Область: {scope} · выполнений проверено: {len(executions)} · "
           f"имён в списке сверки: {len(names)}")
     if not executions:
         print("Журнал пуст: проверять нечего. Это не доказательство границы — "
@@ -126,9 +155,10 @@ def main() -> int:
     violations: list[str] = []
     for item in executions:
         blob = json.dumps(item, ensure_ascii=False)
-        where = f"выполнение {item.get('id', '?')} · {item.get('workflowId', 'без имени')}"
+        flow = flows.get(item.get("workflowId")) or item.get("workflowId") or "без имени"
+        where = f"выполнение {item.get('id', '?')} · {flow}"
         for label, sample in scan(blob, names):
-            shown = sample[:4] + "…" if label != "имя из базы" else sample
+            shown = sample if label == "имя из базы" else sample[:4] + "…"
             violations.append(f"{where}: {label} ({shown})")
 
     if violations:
