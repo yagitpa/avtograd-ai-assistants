@@ -87,10 +87,26 @@ def check_core(rep: Report) -> None:
     try:
         r = httpx.get(url, timeout=5)
         body = r.json()
-        rep.add(OK, "HTTP-ядро", f"отвечает на {port}, знания {body.get('kb_version')}")
     except Exception as exc:
         rep.add(BAD, "HTTP-ядро", f"{type(exc).__name__} на {url}",
                 "запустите: python tools/api.py")
+        return
+
+    rep.add(OK, "HTTP-ядро", f"отвечает на {port}")
+
+    # Процесс держит версии с момента старта (ADR-0016): это сознательно —
+    # ответ помечается тем текстом, с которым ядро работало. Но запущенное
+    # до правки ядро молча штампует устаревшую версию, и расхождение видно
+    # только здесь. На демонстрации оно попадёт в кадр.
+    running = {"kb": body.get("kb_version"), **(body.get("prompt_versions") or {})}
+    on_disk = {"kb": KB_VERSION, **PROMPT_VERSIONS}
+    drift = [k for k, v in on_disk.items() if running.get(k) and running[k] != v]
+    if drift:
+        rep.add(BAD, "версии в ядре",
+                "процесс запущен до правки: расходится " + ", ".join(drift),
+                "перезапустите python tools/api.py (и ботов, если подняты)")
+    else:
+        rep.add(OK, "версии в ядре", "совпадают с файлами на диске")
 
 
 def check_bots(rep: Report) -> None:
@@ -167,18 +183,29 @@ def check_n8n(rep: Report) -> None:
     if not base or not key:
         rep.add(WARN, "n8n", "адрес или ключ не заданы — холодный контур не показать")
         return
+    # Список отдаётся вместе с узлами каждого сценария: в живой инсталляции
+    # это мегабайты. На коротком таймауте ответ не дочитывается, и httpx
+    # падает с JSONDecodeError — который читается как «n8n недоступен»,
+    # хотя n8n в полном порядке. Минута вместо пятнадцати секунд.
     try:
-        r = httpx.get(f"{base}/api/v1/workflows", params={"limit": 250}, timeout=15,
+        r = httpx.get(f"{base}/api/v1/workflows", params={"limit": 250}, timeout=60,
                       headers={"X-N8N-API-KEY": key, "ngrok-skip-browser-warning": "1"})
-        names = [w["name"] for w in r.json().get("data", [])
-                 if w["name"].startswith(("01.", "02.", "03.", "04."))]
-        if len(names) == 4:
-            rep.add(OK, "n8n", "все четыре сценария на месте")
-        else:
-            rep.add(WARN, "n8n", f"сценариев найдено {len(names)} из 4",
-                    "python tools/n8n_push.py push")
     except Exception as exc:
-        rep.add(WARN, "n8n", f"{type(exc).__name__} — инсталляция недоступна")
+        rep.add(WARN, "n8n", f"{type(exc).__name__} — инсталляция не отвечает")
+        return
+    try:
+        data = r.json().get("data", [])
+    except ValueError:
+        rep.add(WARN, "n8n", f"ответ не разобран (код {r.status_code}, "
+                f"{r.headers.get('content-type', 'тип неизвестен')})",
+                "проверьте N8N_BASE_URL и ключ")
+        return
+    names = [w["name"] for w in data if w["name"].startswith(("01.", "02.", "03.", "04."))]
+    if len(names) == 4:
+        rep.add(OK, "n8n", f"все четыре сценария на месте (всего в инсталляции {len(data)})")
+    else:
+        rep.add(WARN, "n8n", f"сценариев найдено {len(names)} из 4",
+                "python tools/n8n_push.py push")
 
 
 def check_versions(rep: Report) -> None:
@@ -218,11 +245,18 @@ def main() -> int:
         if fix:
             print(f"   {'':<{width}}  → {fix}")
 
+    # Итог повторяет препятствия списком. Строка «мешает начать: 1» без
+    # названия бесполезна ровно тогда, когда нужна: когда вывод не влез
+    # в экран и верх уехал за край.
     blocking = rep.blocking
     print()
     if blocking:
         print(f"Мешает начать: {len(blocking)}. Демонстрацию не начинайте, "
-              "пока не закрыты.")
+              "пока не закрыты:")
+        for _, what, detail, fix in blocking:
+            print(f"  ! {what} — {detail}")
+            if fix:
+                print(f"      → {fix}")
         return 1
     warns = sum(1 for r in rep.rows if r[0] == WARN)
     print("Стенд готов." + (f" Замечаний, не мешающих показу: {warns}." if warns else ""))
