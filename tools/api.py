@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import Depends, FastAPI, Header, HTTPException  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
+import cold  # noqa: E402
 from assistant import KB_VERSION, PROMPT_VERSIONS, ROLES, answer, load_env  # noqa: E402
 from ports import FixtureCrm  # noqa: E402
 from router import ROUTE_NAMES, route as pick_route  # noqa: E402
@@ -82,6 +83,12 @@ class Reply(BaseModel):
     handover_id: str | None = None
 
 
+class StockFeed(BaseModel):
+    csv: str = Field(description="фид стока целиком, разделитель «;»")
+    generated_at: datetime | None = Field(default=None,
+                                          description="время выгрузки; по умолчанию — сейчас")
+
+
 class Takeover(BaseModel):
     by: str = Field(description="кто забирает диалог: идентификатор сотрудника")
 
@@ -124,7 +131,8 @@ def message(incoming: Incoming, _: str = Depends(api_key)) -> Reply:
                       channel_message_id=incoming.message_id)
 
     result = answer(chosen, store.history(dialog_id, route=chosen), now=datetime.now(),
-                    cache=store, pii_map=store.mapping(dialog_id))
+                    cache=store, stale=cold.is_stale(),
+                    pii_map=store.mapping(dialog_id))
 
     handover_id = None
     if result["mode"].startswith("ЭСКАЛАЦИЯ"):
@@ -175,6 +183,70 @@ def dialog(dialog_id: int, _: str = Depends(api_key)) -> dict:
 def stats(_: str = Depends(api_key)) -> dict:
     return {"store": store.stats(), "handovers": len(crm.pending()),
             "prompt_versions": PROMPT_VERSIONS, "kb_version": KB_VERSION}
+
+
+# --------------------------------------------------------------------------
+# Холодный контур (этап 5). Наружу уходят номера и числа, внутрь — команды.
+#
+# Ни одна ручка ниже не возвращает имя, телефон, VIN или текст переписки.
+# Это не вежливость к n8n, а граница ADR-0002: то, чего холодный контур не
+# получил, не может утечь в его журналы. Проверяется `tools/check_boundary.py`.
+# --------------------------------------------------------------------------
+
+@app.get("/v1/cold/stock")
+def stock_state(_: str = Depends(api_key)) -> dict:
+    """Свежесть стока. По ней n8n решает, будить ли синхронизацию вне расписания."""
+    return cold.feed_state()
+
+
+@app.post("/v1/cold/stock/sync")
+def stock_sync(feed: StockFeed, _: str = Depends(api_key)) -> dict:
+    """Приём свежего фида. Разбор до записи: негодный фид не заменяет годный."""
+    try:
+        return cold.sync_stock(feed.csv, feed.generated_at)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/v1/cold/followups")
+def followups(hours: int = 24, limit: int = 50, _: str = Depends(api_key)) -> dict:
+    """Диалоги, где клиент замолчал. Только номера — кому писать, знает ядро."""
+    return {"hours": hours, "dialogs": store.silent_dialogs(hours, limit=limit)}
+
+
+@app.post("/v1/cold/followup/{dialog_id}")
+def followup_send(dialog_id: int, _: str = Depends(api_key)) -> dict:
+    """Одно напоминание в диалог. Повтор запроса второго сообщения не рождает."""
+    return cold.send_followup(cold.senders(), store, dialog_id)
+
+
+@app.get("/v1/cold/digest")
+def digest(days: int = 1, _: str = Depends(api_key)) -> dict:
+    """Сводка руководителю: счётчики и состояние фида, без единой реплики."""
+    data = store.digest(days)
+    feed = cold.feed_state()
+    return {**data, "сток": feed, "текст": cold.digest_text(data, feed)}
+
+
+@app.post("/v1/cold/digest/send")
+def digest_send(days: int = 1, _: str = Depends(api_key)) -> dict:
+    """Отправляет сводку дежурным. Токены остаются в ядре, а не в n8n.
+
+    Сводку мог бы разослать и сам n8n — персональных данных в ней нет. Но
+    тогда в холодном контуре появились бы токены ботов, и утечка журнала n8n
+    стоила бы уже не чисел, а доступа к переписке. Один секрет — одно место.
+    """
+    data = store.digest(days)
+    feed = cold.feed_state()
+    text = cold.digest_text(data, feed)
+    bot = cold.senders().get("telegram-ops")
+    targets = sorted(cold.env_digest_ids())
+    if bot is None or not targets:
+        return {"sent": 0, "reason": "нет канала консоли или пустой AVTOGRAD_DIGEST_IDS",
+                "текст": text}
+    for chat_id in targets:
+        bot.send(chat_id, text)
+    return {"sent": len(targets), "текст": text}
 
 
 def main() -> int:

@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import httpx  # noqa: E402
 
 from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, answer, load_env  # noqa: E402
+import cold  # noqa: E402
 from ops_console import (env_ops_ids, handle_ops, notify_operators,  # noqa: E402
                          relay_to_operator,
                          release_stale)
@@ -235,7 +236,12 @@ def handle_client(bot: Bot, upd: dict) -> None:
     bot.typing(chat_id)
     # Словарь плейсхолдеров диалога передаётся в ядро: телефон, названный в
     # первой реплике, должен и в третьей называться тем же {{PHONE_1}}.
+    # Свежесть стока считается на каждом ответе, а не задаётся флагом.
+    # До этапа 5 признак выставляли только вручную в chat.py и в эталонных
+    # прогонах: правило «фид протух — по наличию не отвечать» жило в промпте
+    # и в сборке контекста, но в живом боте не включалось никогда.
     result = answer(chosen, history, now=datetime.now(), cache=bot.store,
+                    stale=cold.is_stale(),
                     pii_map=bot.store.mapping(dialog_id),
                     extra_context=returning_note(bot.store, contact_id, dialog_id))
 

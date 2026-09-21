@@ -128,6 +128,13 @@ CREATE TABLE IF NOT EXISTS escalation (
     closed_by   TEXT
 );
 
+CREATE TABLE IF NOT EXISTS followup (
+    id          INTEGER PRIMARY KEY,
+    dialog_id   INTEGER NOT NULL REFERENCES dialog(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    sent_at     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS answer_cache (
     key         TEXT PRIMARY KEY,
     role        TEXT NOT NULL,
@@ -149,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_message_dialog ON message(dialog_id, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_message_dedup
     ON message(dialog_id, channel_message_id) WHERE channel_message_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_dialog_contact ON dialog(contact_id, last_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_followup_once ON followup(dialog_id, kind);
 """
 
 
@@ -544,6 +552,71 @@ class Store:
             " JOIN channel_identity ci ON ci.contact_id = d.contact_id"
             "  AND ci.channel = d.channel WHERE d.id = ?", (dialog_id,)).fetchone()
         return (row["channel"], row["channel_user_id"]) if row else None
+
+    def silent_dialogs(self, hours: int, kind: str = "followup",
+                       limit: int = 50) -> list[int]:
+        """Диалоги, где последним говорил ассистент, а клиент молчит.
+
+        Возвращает **только номера диалогов**. Холодный контур не получает ни
+        имени, ни телефона, ни текста: n8n решает «пора напомнить», а что
+        именно сказать и куда отправить — дело ядра (ADR-0002).
+
+        Из выборки исключены диалоги, которые ведёт человек: напоминание от
+        ассистента посреди разговора с менеджером выглядит как сбой. Исключены
+        и те, по которым касание этого вида уже было: напоминать дважды —
+        навязчивость, а не забота.
+        """
+        edge = (datetime.now() - timedelta(hours=hours)).isoformat(timespec="seconds")
+        rows = self.conn.execute(
+            "SELECT d.id FROM dialog d"
+            " WHERE d.owner = 'bot_owned'"
+            "   AND d.last_at <= ?"
+            "   AND NOT EXISTS (SELECT 1 FROM followup f"
+            "                   WHERE f.dialog_id = d.id AND f.kind = ?)"
+            "   AND (SELECT direction FROM message m WHERE m.dialog_id = d.id"
+            "        ORDER BY m.id DESC LIMIT 1) = 'out'"
+            " ORDER BY d.last_at LIMIT ?",
+            (edge, kind, int(limit))).fetchall()
+        return [int(r["id"]) for r in rows]
+
+    def mark_followup(self, dialog_id: int, kind: str = "followup") -> bool:
+        """Отмечает касание. False — такое касание уже было, слать не нужно."""
+        try:
+            self.conn.execute(
+                "INSERT INTO followup (dialog_id, kind, sent_at) VALUES (?, ?, ?)",
+                (dialog_id, kind, now_iso()))
+        except sqlite3.IntegrityError:
+            return False
+        self.conn.commit()
+        return True
+
+    def digest(self, days: int = 1) -> dict:
+        """Сводка руководителю: одни числа.
+
+        Ни одной строки, написанной клиентом или ассистентом, — сводка уходит
+        в канал, который холодный контур имеет право читать, и попасть в неё
+        может только то, что не является персональными данными.
+        """
+        since = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+
+        def one(sql: str) -> int:
+            return int(self.conn.execute(sql, (since,)).fetchone()[0])
+
+        by_route = {
+            row["route"] or "не определён": int(row["n"])
+            for row in self.conn.execute(
+                "SELECT route, COUNT(*) AS n FROM dialog"
+                " WHERE opened_at >= ? GROUP BY route", (since,)).fetchall()}
+        return {
+            "период_дней": int(days),
+            "диалогов": one("SELECT COUNT(*) FROM dialog WHERE opened_at >= ?"),
+            "сообщений_клиентов": one("SELECT COUNT(*) FROM message"
+                                      " WHERE direction = 'in' AND created_at >= ?"),
+            "эскалаций": one("SELECT COUNT(*) FROM escalation WHERE created_at >= ?"),
+            "эскалаций_открытых": one("SELECT COUNT(*) FROM escalation"
+                                      " WHERE closed_at IS NULL AND created_at >= ?"),
+            "по_маршрутам": by_route,
+        }
 
     def stats(self) -> dict:
         def one(sql: str) -> int:
