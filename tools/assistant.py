@@ -103,18 +103,38 @@ def load_env(path: Path | None = None) -> None:
 
     Уже заданная переменная окружения приоритетнее файла: так временный
     экспорт в консоли перекрывает .env, а не наоборот.
+
+    **Внутри файла побеждает последнее объявление.** Дописать настройку в
+    конец — обычный способ её поменять, и прежнее поведение (побеждало
+    первое) делало такую правку невидимой: значение молча оставалось
+    старым. Найдено при подключении YandexGPT — `AVTOGRAD_MODEL` был
+    объявлен дважды, запрос ушёл со старой моделью, а провайдер ответил
+    «не разобрал имя модели», и причина искалась в ключе и адресе.
+
+    О дубле сообщается: перекрытая строка чаще всего забытая, а не
+    намеренная, и знать о ней полезнее, чем молча угадать за автора.
     """
     path = path or ROOT / '.env'
     if not path.exists():
         return
-    for raw in path.read_text(encoding='utf-8').splitlines():
+    values: dict[str, str] = {}
+    seen: dict[str, int] = {}
+    for number, raw in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
         line = raw.strip()
         if not line or line.startswith('#') or '=' not in line:
             continue
         key, _, value = line.partition('=')
+        key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if value:
-            os.environ.setdefault(key.strip(), value)
+        if not value:
+            continue
+        if key in values:
+            print(f"[.env] {key} объявлен дважды: строка {seen[key]} перекрыта "
+                  f"строкой {number}, действует последняя")
+        values[key] = value
+        seen[key] = number
+    for key, value in values.items():
+        os.environ.setdefault(key, value)
 
 
 load_env()
