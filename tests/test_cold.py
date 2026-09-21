@@ -40,12 +40,14 @@ def check(condition: bool, title: str) -> None:
 
 
 class FakeBot:
-    def __init__(self, channel="telegram-client"):
+    def __init__(self, channel="telegram-client", accepts=True):
         self.channel = channel
+        self.accepts = accepts
         self.sent: list[tuple[int, str]] = []
 
-    def send(self, chat_id, text, keyboard=None):
+    def send(self, chat_id, text, keyboard=None) -> bool:
         self.sent.append((int(chat_id), text))
+        return self.accepts
 
 
 HEADER = "vin;dealer_id;condition;make;model;trim;year;mileage_km;color;price_rub;status"
@@ -151,6 +153,20 @@ def test_followup_sent_once() -> None:
     check(store.silent_dialogs(hours=0) == [], "после касания диалог выбыл из очереди")
 
 
+def test_followup_reports_refusal() -> None:
+    """«Отправлено» не должно означать «вызов сделан, ответ не смотрели».
+
+    Тот же класс дефекта, что в ADR-0023: отчёт о действии, которого могло
+    не быть. В фоновой задаче он опаснее — никто не переспросит.
+    """
+    store, dialog = scene()
+    bot = FakeBot(accepts=False)
+    result = cold.send_followup({"telegram-client": bot}, store, dialog)
+    check(not result["sent"], "отказ канала отражён в отчёте")
+    check(result["reason"] == "канал не принял сообщение", "названа причина")
+    check(len(bot.sent) == 1, "попытка была ровно одна")
+
+
 def test_followup_respects_human() -> None:
     store, dialog = scene()
     bot = FakeBot()
@@ -213,7 +229,8 @@ def test_boundary_scanner_catches_leaks() -> None:
 def main() -> int:
     for test in (test_feed_freshness, test_sync_rejects_bad_feed,
                  test_silent_dialogs_returns_ids_only, test_followup_sent_once,
-                 test_followup_respects_human, test_digest_has_no_personal_data,
+                 test_followup_reports_refusal, test_followup_respects_human,
+                 test_digest_has_no_personal_data,
                  test_boundary_scanner_catches_leaks):
         test()
     print(f"Проверок выполнено: {passed + len(failed)}")

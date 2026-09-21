@@ -118,12 +118,25 @@ class Bot:
             print(f"[{self.label}] ошибка {method}: {exc}")
             return {"ok": False}
 
-    def send(self, chat_id: int, text: str, keyboard=None):
+    def send(self, chat_id: int, text: str, keyboard=None) -> bool:
+        """Отправляет сообщение и говорит, приняла ли его сторона Telegram.
+
+        Возврат нужен холодному контуру: «отправлено» в отчёте фоновой задачи
+        не должно означать «вызов сделан, а что ответили — не смотрели».
+        Отчёт о действии, которого могло не быть, — тот же дефект, ради
+        которого заведён ADR-0023, только в другом месте.
+        """
+        delivered = True
         for chunk in (text[i:i + TELEGRAM_LIMIT] for i in range(0, len(text), TELEGRAM_LIMIT)) or [""]:
             payload = {"chat_id": chat_id, "text": chunk}
             if keyboard:
                 payload["reply_markup"] = keyboard
-            self.call("sendMessage", **payload)
+            reply = self.call("sendMessage", **payload)
+            if not (isinstance(reply, dict) and reply.get("ok")):
+                delivered = False
+                why = reply.get("description") if isinstance(reply, dict) else reply
+                print(f"[{self.label}] Telegram не принял сообщение для {chat_id}: {why}")
+        return delivered
 
     def typing(self, chat_id: int):
         self.call("sendChatAction", chat_id=chat_id, action="typing")

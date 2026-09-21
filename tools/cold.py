@@ -162,8 +162,14 @@ def send_followup(bots, store, dialog_id: int, kind: str = "followup") -> dict:
 
     route = store.route_of(dialog_id)
     text = followup_text(route)
-    bot.send(int(chat_id), text)
+    delivered = bot.send(int(chat_id), text)
     store.add_message(dialog_id, "out", text, route=route, mode=f"ХОЛОДНЫЙ КОНТУР ({kind})")
+    if not delivered:
+        # Отметка о касании остаётся: повторная попытка через минуту упрётся
+        # в ту же причину, а клиент получит два сообщения, если она была
+        # временной. Разбирается это по журналу, а не молчаливым ретраем.
+        return {"dialog_id": dialog_id, "sent": False, "route": route,
+                "reason": "канал не принял сообщение"}
     return {"dialog_id": dialog_id, "sent": True, "route": route}
 
 
