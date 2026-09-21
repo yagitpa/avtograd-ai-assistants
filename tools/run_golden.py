@@ -7,10 +7,22 @@
 * стоп-лист  — детерминированные шаблоны из `docs/knowledge-base/stop-list.md`;
 * `forbid`   — запреты конкретного диалога (например, «Base» там, где этой
                комплектации у модели нет);
-* `expect`   — что в ответе обязано быть (оговорка про оферту при цене);
+* `expect`   — что в этой реплике обязано быть (оговорка про оферту при цене);
+* `expect_dialog` — что обязано прозвучать хоть где-то в диалоге: часть
+               требований не привязана к ходу, и «сказал сразу» не хуже,
+               чем «сказал после уточнения»;
+
 * `mode`     — ожидаемый режим: ОТВЕТ, ЭСКАЛАЦИЯ, МОЛЧАНИЕ;
 * числа      — все суммы от четырёх знаков сверяются с фикстурами и базой
                знаний. Число, которого там нет, ассистент придумал.
+
+`expect` и `expect_dialog` пишутся **основами, а не словоформами**. Шаблон
+«будни» не совпадает с «по будням», «не числится» — с «не числятся»,
+«только владельц» — с «только владелец». Такой шаблон проходит у того
+провайдера, под чьи формулировки он написан, и падает у следующего: при
+переезде на YandexGPT три диалога из шестидесяти упали именно так, и ни
+один из них не был дефектом ассистента. Правило то же, что для стоп-листа
+(`docs/knowledge-base/stop-list.md`), и нарушается оно так же незаметно.
 
 Нарушение стоп-листа, `forbid`, `expect` и режима — отказ прогона.
 Незнакомое число — предупреждение: сверять его глазами дешевле, чем
@@ -148,6 +160,7 @@ def run_dialog(role: str, case: dict, model: str) -> dict:
             # событие превратилось бы в два расхождения и завысило счёт.
             turns_out.append({"user": turn["user"], "assistant": text,
                               "mode": result["mode"], "records": result.get("records", []),
+                              "guessed": bool(result.get("mode_guessed")),
                               "blocked": result.get("blocked", "")})
             continue
 
@@ -169,7 +182,19 @@ def run_dialog(role: str, case: dict, model: str) -> dict:
 
         turns_out.append({"user": turn["user"], "assistant": text,
                           "mode": result["mode"], "records": result.get("records", []),
+                          "guessed": bool(result.get("mode_guessed")),
                           "blocked": result.get("blocked", "")})
+
+    # Требование уровня диалога, а не реплики. Часть обязательного не привязана
+    # к ходу: вилку дохода ассистент вправе назвать сразу или после уточнения
+    # вакансии, и оба поведения правильные. Проверка «в этой реплике» наказывала
+    # за законное уточнение и ломалась при смене провайдера: OpenAI уточнял,
+    # YandexGPT называл сразу, и один и тот же диалог падал то там, то тут.
+    whole = " ".join(t["assistant"] for t in turns_out)
+    for pattern in case.get("expect_dialog", []):
+        if not re.search(pattern, whole, re.IGNORECASE):
+            problems.append(f"{case['id']}: обязательное «{pattern}» "
+                            "не прозвучало ни в одной реплике")
 
     return {"case": case, "role": role, "turns": turns_out,
             "problems": problems, "caught": caught, "warnings": warnings}
@@ -299,6 +324,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Прогон эталонных диалогов «АвтоГрада»")
     ap.add_argument("--role", choices=sorted(ROLE_FILES), action="append")
     ap.add_argument("--only", action="append", help="идентификатор диалога, можно повторять")
+    ap.add_argument("--dump", metavar="ФАЙЛ",
+                    help="записать реплики частичного прогона в отдельный файл: "
+                         "сравнение провайдеров надо читать, а не только считать")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--passes", type=int, default=1,
@@ -341,6 +369,21 @@ def main() -> int:
     # расшифровки остальных диалогов, и приложение перестало бы быть полным.
     if args.only:
         print("Частичный прогон: расшифровки и отчёт не перезаписываются.")
+        if args.dump:
+            # Приложение к сдаче собирается полным прогоном и частичным не
+            # трогается. Но приёмка, которую нельзя прочитать, — это счётчик,
+            # а не приёмка: сравнивая провайдеров, смотрят на формулировки.
+            lines = ["# Реплики частичного прогона", "",
+                     f"**Модель:** `{args.model}` · **диалогов:** {len(jobs)} · "
+                     f"**время:** {seconds} с", ""]
+            for r in runs:
+                lines += [f"## {r['case']['id']} — {r['case']['title']}", ""]
+                for turn in r["turns"]:
+                    lines += [f"**Клиент:** {turn['user']}", "",
+                              f"**Ассистент:** {turn['assistant']}", "",
+                              f"*режим: {turn.get('mode', '—')}*", ""]
+            Path(args.dump).write_text("\n".join(lines) + "\n", encoding="utf-8")
+            print(f"Реплики: {args.dump}")
     else:
         for role in roles:
             # В расшифровки идёт последний прогон каждого диалога: приложение
@@ -372,6 +415,15 @@ def main() -> int:
           f"{sum(len(r['turns']) for r in runs)} · время: {seconds:.0f} с")
     print(f"Дошло бы до клиента: {len(problems)} · поймал валидатор: {len(caught)} · "
           f"чисел под вопросом: {len(warnings)}")
+
+    # Соблюдение контракта о режиме — свойство модели, и при смене провайдера
+    # оно меняется первым. Считается отдельно от расхождений: клиент этого не
+    # видит, но эскалация держится на догадке, а не на объявлении.
+    turns = sum(len(r["turns"]) for r in runs)
+    guessed = sum(1 for r in runs for t in r["turns"] if t.get("guessed"))
+    if turns:
+        print(f"Режим не объявлен ассистентом: {guessed} из {turns} реплик "
+              f"({100 * guessed / turns:.0f}%) — определён по признакам")
     print(f"Отчёт: docs/golden/report.md")
     return 1 if problems else 0
 

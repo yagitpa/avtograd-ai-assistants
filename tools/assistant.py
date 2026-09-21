@@ -959,7 +959,8 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     # этом в журнал: частая догадка означает, что чинить надо промпт.
     text, declared = split_mode(text)
     record_ids = [r.get("id") for r in records]
-    if declared is None:
+    guessed = declared is None
+    if guessed:
         declared = guess_mode(text, record_ids)
         print(f"[ядро] ассистент не назвал режим, определён по признакам: {declared}")
 
@@ -971,8 +972,12 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
                       "records": [r.get("id") for r in records],
                       "violations": violations, "blocked": text}, role)
 
+    # Соблюдение контракта о режиме — свойство модели, а не ядра, и при смене
+    # провайдера меняется первым. Признак возвращается наружу, чтобы прогон
+    # мог его посчитать: «страховка сработала» и «страховка работает вместо
+    # контракта» — разные состояния.
     result = stamp({"text": text, "mode": declared, "records": record_ids,
-                    "violations": []}, role)
+                    "violations": [], "mode_guessed": guessed}, role)
 
     # Срок жизни привязан к источнику: ответ, опирающийся на сток, живёт не
     # дольше интервала обновления фида. Справка по регламенту живёт до смены
