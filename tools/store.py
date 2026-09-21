@@ -618,6 +618,61 @@ class Store:
             "по_маршрутам": by_route,
         }
 
+    # Признаки ответа «не знаю» в тексте. Режимом это не ловится: отказ найти
+    # запись — законный ОТВЕТ, а не эскалация. Мерить его надо потому, что
+    # растущая доля означает дыру в базе знаний, а не поломку ассистента.
+    DONT_KNOW = ("не наш", "нет записи", "не могу ответить", "не располагаю",
+                 "нет данных", "не обнаруж", "отсутствует в базе", "не отвечу")
+
+    def quality(self, days: int = 7) -> dict:
+        """Метрики качества за период. Числа, по которым видно, где чинить.
+
+        Считается по исходящим сообщениям ассистента: реплики человека и
+        касания холодного контура исключены — они не характеризуют модель.
+
+        Доли считаются от одного знаменателя, чтобы их можно было складывать
+        глазами. Знаменатель назван явно: проценты без него — украшение.
+        """
+        since = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+        rows = self.conn.execute(
+            "SELECT text, COALESCE(mode, '') AS mode FROM message"
+            " WHERE direction = 'out' AND created_at >= ?"
+            "   AND COALESCE(mode, '') NOT LIKE 'ЧЕЛОВЕК%'"
+            "   AND COALESCE(mode, '') NOT LIKE 'ХОЛОДНЫЙ КОНТУР%'"
+            "   AND COALESCE(mode, '') != 'МОЛЧАНИЕ'", (since,)).fetchall()
+        total = len(rows)
+
+        def share(n: int) -> float:
+            return round(100 * n / total, 1) if total else 0.0
+
+        escalations = [r for r in rows if r["mode"].startswith("ЭСКАЛАЦИЯ")]
+        by_reason: dict[str, int] = {}
+        for row in escalations:
+            reason = row["mode"].partition("(")[2].rstrip(")") or "по решению ассистента"
+            by_reason[reason] = by_reason.get(reason, 0) + 1
+        validator = by_reason.get("валидатор", 0)
+        dont_know = sum(1 for r in rows
+                        if any(m in r["text"].lower() for m in self.DONT_KNOW))
+        clarify = sum(1 for r in rows if r["mode"].startswith("УТОЧНЕНИЕ"))
+
+        cache_rows = self.conn.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(hits), 0) AS h FROM answer_cache").fetchone()
+        stored, hits = int(cache_rows["n"]), int(cache_rows["h"])
+
+        return {
+            "период_дней": int(days),
+            "ответов_ассистента": total,
+            "не_знаю": {"штук": dont_know, "доля_%": share(dont_know)},
+            "эскалаций": {"штук": len(escalations), "доля_%": share(len(escalations)),
+                          "по_причинам": dict(sorted(by_reason.items(),
+                                                     key=lambda kv: -kv[1]))},
+            "поймал_валидатор": {"штук": validator, "доля_%": share(validator)},
+            "уточнений": {"штук": clarify, "доля_%": share(clarify)},
+            "кэш": {"записей": stored, "попаданий": hits,
+                    "сэкономлено_вызовов_%": round(100 * hits / (hits + stored), 1)
+                                             if hits + stored else 0.0},
+        }
+
     def stats(self) -> dict:
         def one(sql: str) -> int:
             return int(self.conn.execute(sql).fetchone()[0])
@@ -647,6 +702,26 @@ def main() -> int:
     if command == "stats":
         for key, value in store.stats().items():
             print(f"{key}: {value}")
+    elif command == "quality":
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        data = store.quality(days)
+        total = data["ответов_ассистента"]
+        print(f"Метрики качества за {days} дн. · ответов ассистента: {total}")
+        if not total:
+            print("Ответов за период нет — мерить нечего.")
+            return 0
+        for key in ("не_знаю", "эскалаций", "поймал_валидатор", "уточнений"):
+            block = data[key]
+            print(f"  {key.replace('_', ' '):18} {block['штук']:4} "
+                  f"({block['доля_%']}%)")
+        reasons = data["эскалаций"]["по_причинам"]
+        if reasons:
+            print("  причины эскалаций:")
+            for reason, count in reasons.items():
+                print(f"    · {reason}: {count}")
+        cache = data["кэш"]
+        print(f"  кэш: записей {cache['записей']}, попаданий {cache['попаданий']} "
+              f"({cache['сэкономлено_вызовов_%']}% вызовов не сделано)")
     elif command == "purge":
         result = store.purge()
         print(f"Удалено диалогов старше {DIALOG_TTL_DAYS} дней: {result['dialogs']}; "
@@ -658,7 +733,7 @@ def main() -> int:
         result = store.forget(int(sys.argv[2]))
         print(f"Контакт {sys.argv[2]} удалён вместе с диалогами: {result['dialogs']}")
     else:
-        print("Команды: stats, purge, forget <contact_id>")
+        print("Команды: stats, quality [дней], purge, forget <contact_id>")
         return 1
     return 0
 

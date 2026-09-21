@@ -44,7 +44,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 import cold  # noqa: E402
-from assistant import KB_VERSION, PROMPT_VERSIONS, ROLES, answer, load_env  # noqa: E402
+from assistant import KB_VERSION, PROMPT_VERSIONS, ROLES, load_env, safe_answer  # noqa: E402
 from ports import FixtureCrm  # noqa: E402
 from router import ROUTE_NAMES, route as pick_route  # noqa: E402
 from store import Store  # noqa: E402
@@ -136,7 +136,7 @@ def message(incoming: Incoming, _: str = Depends(api_key)) -> Reply:
     store.add_message(dialog_id, "in", incoming.text, route=chosen,
                       channel_message_id=incoming.message_id)
 
-    result = answer(chosen, store.history(dialog_id, route=chosen), now=datetime.now(),
+    result = safe_answer(chosen, store.history(dialog_id, route=chosen), now=datetime.now(),
                     cache=store, stale=cold.is_stale(),
                     pii_map=store.mapping(dialog_id))
 
@@ -253,6 +253,18 @@ def digest_send(days: int = 1, _: str = Depends(api_key)) -> dict:
     for chat_id in targets:
         bot.send(chat_id, text)
     return {"sent": len(targets), "текст": text}
+
+
+@app.get("/v1/metrics")
+def metrics(days: int = 7, _: str = Depends(api_key)) -> dict:
+    """Метрики качества: где чинить, а не «всё ли хорошо».
+
+    Доля «не знаю» растёт — дыра в базе знаний. Доля сработок валидатора
+    растёт — промпт разошёлся со стоп-листом. Доля эскалаций растёт — либо
+    первое, либо второе, и разбивка по причинам говорит, что именно.
+    Персональных данных здесь нет: только счётчики и доли.
+    """
+    return store.quality(days)
 
 
 def main() -> int:

@@ -58,6 +58,26 @@ def llm_client():
     return OpenAI()
 
 
+def llm_backup():
+    """Резервный провайдер — уровень L2 лестницы деградации.
+
+    Без него ядро дважды дёргало упавшего провайдера и уходило сразу на L3:
+    вместо ответа клиент получал «передаю менеджеру». Формально не молчание,
+    по существу — потеря ответа, который резерв выдал бы за секунду.
+
+    Пусто в окружении — резерва нет, и это законное состояние: заказчик
+    вправе жить на одном провайдере. Тогда лестница честно короче на ступень,
+    а не делает вид, что ступень есть.
+    """
+    base = os.environ.get("AVTOGRAD_LLM_FALLBACK_BASE", "").strip()
+    key = os.environ.get("AVTOGRAD_LLM_FALLBACK_KEY", "").strip()
+    if not base:
+        return None, None
+    from openai import OpenAI
+    model = os.environ.get("AVTOGRAD_LLM_FALLBACK_MODEL", "").strip() or None
+    return OpenAI(base_url=base, api_key=key), model
+
+
 def stamp(result: dict, role: str) -> dict:
     """Помечает ответ версиями промпта и знаний.
 
@@ -703,6 +723,34 @@ def validate_outgoing(text: str) -> list[str]:
     return found
 
 
+# Уровень L4: ядро упало целиком. Лестница обещает, что канал сложит
+# сообщение и ответит автоматом, — и обещание должно исполняться кодом
+# канала, а не надеждой на то, что ядро не падает.
+CORE_DOWN = ("Сейчас не могу обработать обращение — в системе сбой. Сообщение "
+             "сохранено, специалист свяжется с вами. Повторять не нужно.")
+
+
+def safe_answer(role: str, history: list[dict], **kwargs) -> dict:
+    """`answer` под страховкой: исключение не выходит в канал.
+
+    Граница ответственности здесь та же, что в архитектуре: L1–L3 удерживает
+    ядро, L4 удерживает канал. Поэтому обёртка отдельная, а не try внутри
+    `answer` — вызов через неё это осознанное «я канал, мне нельзя падать».
+
+    Входящее сообщение к этому моменту уже записано в диалог: очередь на
+    дообработку — это сама переписка, отдельного хранилища не нужно.
+    """
+    try:
+        return answer(role, history, **kwargs)
+    except Exception as exc:  # noqa: BLE001 — на то и страховка
+        import traceback
+        print(f"[ядро] СБОЙ: {type(exc).__name__}: {exc}")
+        traceback.print_exc()
+        return stamp({"text": CORE_DOWN, "mode": "ЭСКАЛАЦИЯ (сбой ядра)",
+                      "records": [], "violations": [],
+                      "note": f"{type(exc).__name__}: {exc}"}, role)
+
+
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
            model: str | None = None, extra_context: str = "", cache=None,
@@ -822,6 +870,22 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
             text = ""
         if text:
             break
+
+    # Уровень L2: основной провайдер не ответил — пробуем резервного, прежде
+    # чем признать поражение. Промпт и знания те же самые: ADR-0005 обещает
+    # переносимость без правки текстов, и здесь это обещание используется.
+    if not text:
+        backup, backup_model = llm_backup()
+        if backup is not None:
+            try:
+                resp = backup.chat.completions.create(model=backup_model or model,
+                                                      messages=messages)
+                text = (resp.choices[0].message.content or "").strip()
+                if text:
+                    print("[ядро] ответ получен у резервного провайдера (L2)")
+            except Exception as exc:
+                print(f"[ядро] резервный провайдер тоже недоступен: {exc}")
+                text = ""
 
     if not text:
         return stamp({"text": "Не получается ответить прямо сейчас — передаю обращение "

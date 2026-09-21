@@ -1,6 +1,6 @@
 """Тесты HTTP-ядра: аутентификация, дедупликация, перехват диалога.
 
-Модель не вызывается: `answer` подменяется заглушкой. Проверяется то, за чем
+Модель не вызывается: `safe_answer` подменяется заглушкой. Проверяется то, за чем
 API и заводился, — поведение вокруг ответа, а не сам ответ.
 
 Запуск:  python tests/test_api.py
@@ -58,7 +58,10 @@ def setup() -> TestClient:
     tmp = Path(tempfile.mkdtemp())
     api.store = Store(tmp / "api.db")
     api.crm = FixtureCrm(tmp / "outbox.jsonl")
-    api.answer = fake_answer
+    # Каналы зовут ядро через страховку L4 (`safe_answer`), значит и
+    # подменять надо её: заглушка на `answer` просто перестала бы
+    # вызываться, а тест — проверять пустоту.
+    api.safe_answer = fake_answer
     calls["answer"] = 0
     return TestClient(api.app)
 

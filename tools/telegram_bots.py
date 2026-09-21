@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import httpx  # noqa: E402
 
-from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, answer, load_env  # noqa: E402
+from assistant import PROMPT_VERSIONS, KB_VERSION, ROLES, load_env, safe_answer  # noqa: E402
 import cold  # noqa: E402
 from ops_console import (env_ops_ids, handle_ops, notify_operators,  # noqa: E402
                          relay_to_operator,
@@ -253,7 +253,7 @@ def handle_client(bot: Bot, upd: dict) -> None:
     # До этапа 5 признак выставляли только вручную в chat.py и в эталонных
     # прогонах: правило «фид протух — по наличию не отвечать» жило в промпте
     # и в сборке контекста, но в живом боте не включалось никогда.
-    result = answer(chosen, history, now=datetime.now(), cache=bot.store,
+    result = safe_answer(chosen, history, now=datetime.now(), cache=bot.store,
                     stale=cold.is_stale(),
                     pii_map=bot.store.mapping(dialog_id),
                     extra_context=returning_note(bot.store, contact_id, dialog_id))
@@ -326,7 +326,7 @@ def handle_staff(bot: Bot, upd: dict) -> None:
     bot.typing(chat_id)
     # Внутренний контур мимо кэша: вопросы сотрудников про отпуск и справки
     # почти всегда касаются их самих, а выигрыш от кэша здесь исчезающе мал.
-    result = answer("hr", history, now=datetime.now(), extra_context=STAFF_CONTEXT,
+    result = safe_answer("hr", history, now=datetime.now(), extra_context=STAFF_CONTEXT,
                     pii_map=bot.store.mapping(dialog_id))
     if not result["text"]:
         return
