@@ -50,6 +50,15 @@ def llm_client():
     Само обещание пока не проверено: ключей GigaChat и YandexGPT в учебном
     контуре нет. Проверка — приёмочный тест этапа 6.
     """
+    # Провайдер с собственным порядком доступа объявляется по имени.
+    # Проверка обещания ADR-0005 показала, что «совместимый API» и
+    # «совместимый доступ» — разные вещи: у GigaChat запросы уходят без
+    # правки промптов, но ключа мало, нужен токен на полчаса.
+    provider = os.environ.get("AVTOGRAD_LLM_PROVIDER", "").strip().lower()
+    if provider == "gigachat":
+        from providers import gigachat_client
+        return gigachat_client()
+
     from openai import OpenAI
     base = os.environ.get("AVTOGRAD_LLM_BASE", "").strip()
     key = os.environ.get("AVTOGRAD_LLM_KEY", "").strip()
@@ -109,7 +118,23 @@ def load_env(path: Path | None = None) -> None:
 
 
 load_env()
-DEFAULT_MODEL = os.environ.get('AVTOGRAD_MODEL', 'gpt-5-mini')
+
+
+def default_model() -> str:
+    """Модель по умолчанию следует за провайдером.
+
+    `AVTOGRAD_MODEL` со значением `gpt-5-mini`, отправленное в GigaChat, —
+    ошибка, которую легко не заметить: провайдер ответит «нет такой модели»,
+    и это спишут на сбой подключения.
+    """
+    named = os.environ.get('AVTOGRAD_MODEL', '').strip()
+    if os.environ.get('AVTOGRAD_LLM_PROVIDER', '').strip().lower() == 'gigachat':
+        from providers import gigachat_model
+        return gigachat_model()
+    return named or 'gpt-5-mini'
+
+
+DEFAULT_MODEL = default_model()
 
 ROLES = {
     "sales": {"file": "sales.md", "department": "sales_new", "name": "Первый контакт"},
