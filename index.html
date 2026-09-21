@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Нейроассистенты «АвтоГрад»</title>
+<meta name="description" content="Три диалоговых ассистента дилерского центра и обвязка, без которой их нельзя выпускать к клиенту. Учебный проект.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@400;600&display=swap">
+<style>
+  :root{
+    --paper:#F1F2EE;
+    --surface:#FAFBF8;
+    --ink:#14181A;
+    --ink-2:#3C4446;
+    --ink-3:#6B7578;
+    --rule:#D6D9D2;
+    --rule-soft:#E4E7E0;
+    --petrol:#0E5257;
+    --petrol-soft:#DCE7E5;
+    --shadow:0 1px 0 rgba(20,24,26,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#101413;
+      --surface:#171C1B;
+      --ink:#E9ECE6;
+      --ink-2:#B6BDB8;
+      --ink-3:#8A9490;
+      --rule:#2A312F;
+      --rule-soft:#232928;
+      --petrol:#5FB8B4;
+      --petrol-soft:#16302F;
+      --shadow:0 1px 0 rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#101413; --surface:#171C1B; --ink:#E9ECE6; --ink-2:#B6BDB8; --ink-3:#8A9490;
+    --rule:#2A312F; --rule-soft:#232928; --petrol:#5FB8B4; --petrol-soft:#16302F;
+    --shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Golos Text",system-ui,sans-serif;font-size:16px;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:980px;margin:0 auto;padding:0 24px 80px}
+  header{padding:64px 0 32px;border-bottom:1px solid var(--rule)}
+  .eyebrow{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-3);margin:0 0 22px;
+  }
+  h1{
+    font-family:"Unbounded","Golos Text",sans-serif;font-weight:600;
+    font-size:clamp(32px,5.2vw,54px);line-height:1.05;letter-spacing:-.02em;
+    margin:0 0 20px;text-wrap:balance;max-width:16ch;
+  }
+  .deck{font-size:clamp(16.5px,1.9vw,19px);line-height:1.5;color:var(--ink-2);max-width:60ch;margin:0}
+  .facts{display:flex;flex-wrap:wrap;margin-top:34px;border-top:1px solid var(--rule-soft)}
+  .fact{flex:1 1 180px;padding:17px 20px 15px;border-right:1px solid var(--rule-soft)}
+  .fact:last-child{border-right:0}
+  .fact b{
+    display:block;font-family:"Unbounded",sans-serif;font-weight:400;
+    font-size:26px;line-height:1.1;color:var(--petrol);font-variant-numeric:tabular-nums;
+  }
+  .fact span{display:block;margin-top:6px;font-size:13.5px;color:var(--ink-3);line-height:1.4}
+
+  h2{
+    font-family:"Unbounded","Golos Text",sans-serif;font-weight:400;
+    font-size:clamp(20px,2.4vw,26px);letter-spacing:-.015em;margin:48px 0 18px;
+  }
+  .docs{display:grid;grid-template-columns:1fr;gap:0;border-top:1px solid var(--rule)}
+  .doc{
+    display:grid;grid-template-columns:1fr;gap:4px;padding:18px 0;
+    border-bottom:1px solid var(--rule);text-decoration:none;color:inherit;
+  }
+  @media(min-width:640px){.doc{grid-template-columns:minmax(0,1fr) 128px;gap:24px;align-items:baseline}}
+  .doc:hover .doc-t{color:var(--petrol)}
+  .doc-t{font-size:17px;font-weight:700;margin:0 0 4px;letter-spacing:-.005em}
+  .doc p{margin:0;font-size:14.5px;color:var(--ink-2);max-width:62ch}
+  .kind{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--petrol);background:var(--petrol-soft);padding:4px 9px;justify-self:start;white-space:nowrap;
+  }
+  @media(min-width:640px){.kind{justify-self:end}}
+  .note{
+    border:1px solid var(--rule);background:var(--surface);padding:16px 18px;margin-top:36px;
+    font-size:14px;color:var(--ink-2);box-shadow:var(--shadow);
+  }
+  .note b{color:var(--ink)}
+  footer{border-top:1px solid var(--rule);margin-top:40px;padding-top:18px;font-size:13px;color:var(--ink-3)}
+  a{color:var(--petrol)}
+  a:focus-visible{outline:2px solid var(--petrol);outline-offset:3px;border-radius:2px}
+</style>
+
+<div class="page">
+  <header>
+    <p class="eyebrow">Дилерский центр «АвтоГрад» · учебный проект · <a href="https://github.com/yagitpa/avtograd-ai-assistants">исходный код</a></p>
+    <h1>Нейроассистенты дилерского центра</h1>
+    <p class="deck">Три диалоговых ассистента — продажи, сервис, кадры — и обвязка, без которой их нельзя выпускать к клиенту: валидатор исходящих сообщений, шлюз персональных данных, передача разговора живому сотруднику, работа под отказами.</p>
+    <div class="facts">
+      <div class="fact"><b>3</b><span>ассистента в одном чате</span></div>
+      <div class="fact"><b>265</b><span>проверок без обращения к модели</span></div>
+      <div class="fact"><b>0</b><span>нарушений дошло до клиента в прогоне 60 диалогов</span></div>
+      <div class="fact"><b>29</b><span>решений в журнале с обоснованием</span></div>
+    </div>
+  </header>
+
+  <h2>Документы</h2>
+  <div class="docs">
+    <a class="doc" href="docs/pitch/avtograd-assistants.html">
+      <div>
+        <p class="doc-t">Результат работы</p>
+        <p>Что построено, почему этому можно доверить клиента, чем это доказано и что нашла проверка.</p>
+      </div>
+      <span class="kind">страница</span>
+    </a>
+    <a class="doc" href="https://github.com/yagitpa/avtograd-ai-assistants/blob/main/docs/guide/assistants.md">
+      <div>
+        <p class="doc-t">Что умеют ассистенты</p>
+        <p>Сценарии каждого ассистента с диаграммами, точки выхода, передача человеку, карта эскалаций.</p>
+      </div>
+      <span class="kind">github</span>
+    </a>
+    <a class="doc" href="docs/architecture/avtograd-architecture.html">
+      <div>
+        <p class="doc-t">Архитектура</p>
+        <p>Два контура и граница между ними, потоки персональных данных, лестница деградации.</p>
+      </div>
+      <span class="kind">страница</span>
+    </a>
+    <a class="doc" href="docs/plan/avtograd-plan.html">
+      <div>
+        <p class="doc-t">План работ</p>
+        <p>Этапы, критерии приёмки, риски и заложенные точки остановки.</p>
+      </div>
+      <span class="kind">страница</span>
+    </a>
+    <a class="doc" href="https://github.com/yagitpa/avtograd-ai-assistants/blob/main/ENGINEERING_JOURNAL.md">
+      <div>
+        <p class="doc-t">Журнал решений</p>
+        <p>Двадцать девять записей: что решили, почему и что из этого вышло. Принятые не переписываются.</p>
+      </div>
+      <span class="kind">github</span>
+    </a>
+  </div>
+
+  <div class="note">
+    <b>Оговорка по данным.</b> Дилер «АвтоГрад», марки Aurora / Vega / Vector, модели, цены, VIN, вакансии, имена сотрудников и клиентов, телефоны и банки-партнёры вымышлены. Персональные данные реальных лиц не используются и не обрабатываются.
+  </div>
+
+  <footer>Нейроассистенты дилерского центра «АвтоГрад» · сентябрь 2026</footer>
+</div>
+</html>

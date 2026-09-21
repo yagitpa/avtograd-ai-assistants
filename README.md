@@ -8,15 +8,17 @@
 
 ## Документы
 
-| Документ | Для кого | |
-|---|---|---|
-| [**Результат работы**](docs/pitch/avtograd-assistants.html) | тому, кто решает: что построено, чем доказано, что нашла проверка | страница |
-| [**Что умеют ассистенты**](docs/guide/assistants.md) | тому, кто будет работать: сценарии, диаграммы, точки выхода | markdown |
-| [Архитектура](docs/architecture/avtograd-architecture.html) | контуры, потоки персональных данных, лестница деградации | страница |
-| [План работ](docs/plan/avtograd-plan.html) | этапы, критерии приёмки, риски | страница |
-| [Журнал решений](ENGINEERING_JOURNAL.md) | что решили и почему — 29 записей | markdown |
+Всё вместе — на [странице проекта](https://yagitpa.github.io/avtograd-ai-assistants/).
 
-Страницы — HTML: GitHub показывает их исходником, поэтому открывать их нужно в браузере (кнопка **Raw** или локальная копия репозитория).
+| Документ | Для кого |
+|---|---|
+| [**Результат работы**](https://yagitpa.github.io/avtograd-ai-assistants/docs/pitch/avtograd-assistants.html) | тому, кто решает: что построено, чем доказано, что нашла проверка |
+| [**Что умеют ассистенты**](docs/guide/assistants.md) | тому, кто будет работать: сценарии, диаграммы, точки выхода |
+| [Архитектура](https://yagitpa.github.io/avtograd-ai-assistants/docs/architecture/avtograd-architecture.html) | контуры, потоки персональных данных, лестница деградации |
+| [План работ](https://yagitpa.github.io/avtograd-ai-assistants/docs/plan/avtograd-plan.html) | этапы, критерии приёмки, риски |
+| [Журнал решений](ENGINEERING_JOURNAL.md) | что решили и почему — 29 записей |
+
+Три первых документа — HTML-страницы: ссылки ведут на GitHub Pages, где они открываются как страницы. В самом репозитории GitHub показал бы их исходником.
 
 ## Какие задачи решает
 
