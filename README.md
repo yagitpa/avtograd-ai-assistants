@@ -81,7 +81,8 @@ cp .env.example .env
 | `OPENAI_API_KEY` | ключ модели |
 | `AVTOGRAD_MODEL` | модель по умолчанию, необязательно |
 | `AVTOGRAD_LLM_BASE` · `AVTOGRAD_LLM_KEY` | другой провайдер: адрес и ключ вместо OpenAI |
-| `AVTOGRAD_LLM_FALLBACK_BASE` · `_KEY` | резервный провайдер, уровень L2 |
+| `AVTOGRAD_LLM_FALLBACK_BASE` · `_KEY` · `_MODEL` | резервный провайдер, уровень L2 |
+| `AVTOGRAD_LLM_PROVIDER` · `GIGACHAT_*` | GigaChat: у него доступ по токену, нужен адаптер |
 | `AVTOGRAD_CLIENT_BOT_TOKEN` | клиентский бот: продажи, сервис, вакансии |
 | `AVTOGRAD_STAFF_BOT_TOKEN` · `AVTOGRAD_STAFF_IDS` | внутренний бот и кому он открыт |
 | `AVTOGRAD_OPS_BOT_TOKEN` · `AVTOGRAD_OPS_IDS` | консоль эскалаций и кто дежурит |
@@ -89,6 +90,7 @@ cp .env.example .env
 | `AVTOGRAD_API_KEY` · `AVTOGRAD_API_PORT` | доступ к HTTP-ядру и его порт |
 | `AVTOGRAD_DIGEST_IDS` | кому уходит утренняя сводка |
 | `N8N_BASE_URL` · `N8N_API_KEY` | инсталляция n8n для заливки сценариев |
+| `AVTOGRAD_TRACE_PII` | показывать работу шлюза ПДн в журнале процесса |
 
 Пустой список идентификаторов везде означает «никого»: внутренний бот молча отклонит всех и запишет идентификаторы обратившихся в журнал запуска — оттуда их и добавляют.
 
@@ -147,6 +149,18 @@ python tests/test_core.py && python tests/test_pii.py && python tests/test_store
 265 проверок без единого обращения к модели.
 
 ```bash
+python tools/validate_fixtures.py && python tools/validate_kb.py && python tools/validate_prompts.py
+```
+
+Ещё 4018 проверок данных: связность фикстур — битые ссылки между файлами, расхождение цен с прайсом, тестовость телефонов; база знаний — обязательные поля записей, существование источников и адресатов эскалации, непротухшие сроки жизни; системные промпты — все шесть разделов ТЗ в каждой роли и ни одного утёкшего факта в тексте роли.
+
+Версии промптов и базы знаний:
+
+```bash
+python tools/versions.py
+```
+
+```bash
 python tools/run_golden.py
 ```
 
@@ -161,10 +175,12 @@ python tools/store.py quality 7
 ## Структура
 
 ```
+├── index.html                  стартовая страница сайта проекта
 ├── ENGINEERING_JOURNAL.md      журнал решений, ADR-0001 … ADR-0029
 ├── docs/
 │   ├── guide/                  руководство: что умеют ассистенты, с диаграммами
-│   ├── pitch/                  концепция для заказчика
+│   ├── screenshots/            снимки живой работы для документов
+│   ├── pitch/                  результат работы: что построено и чем доказано
 │   ├── plan/                   план реализации по этапам
 │   ├── architecture/           контуры, потоки ПДн, лестница деградации
 │   ├── prompts/                каркас, три роли, журнал правок промптов
@@ -190,6 +206,10 @@ python tools/store.py quality 7
     ├── demo_check.py           предполётная проверка
     ├── run_golden.py           прогон эталонных диалогов
     ├── check_boundary.py       поиск ПДн в журналах n8n
+    ├── n8n_push.py             заливка сценариев в n8n; n8n_annotate.py — записки на холсте
+    ├── versions.py             версии промптов и знаний по содержимому
+    ├── validate_*.py           три валидатора: фикстуры, база знаний, промпты
+    ├── build_deliverable.py    сборка итогового документа из исходников
     └── build_fixtures.py       сборка фикстур; руками они не правятся
 ```
 
