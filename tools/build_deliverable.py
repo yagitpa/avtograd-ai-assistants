@@ -106,6 +106,14 @@ def section(title: str, body: str) -> str:
 def build() -> str:
     today = datetime.now().strftime("%d.%m.%Y")
     counts = checks()
+    # Документ, собранный из исходников, обязан называть, из каких именно:
+    # иначе распечатанный комплект нечем сверить с репозиторием, а правка
+    # промпта делает документ незаметно устаревшим.
+    from versions import kb_version, prompt_version
+    names = {"sales": "продажи", "service": "сервис", "hr": "кадры"}
+    versions = " · ".join(f"{names[r]} `{prompt_version(r)}`"
+                          for r in ("sales", "service", "hr"))
+    kb = kb_version()
 
     parts = [section(
         "О документе",
@@ -118,6 +126,7 @@ def build() -> str:
 с `TEST`.
 
 **Дата сборки:** {today}.
+**Версии промптов:** {versions}; **база знаний:** `{kb}`.
 **Исходники и история решений:** <https://github.com/yagitpa/avtograd-ai-assistants>
 
 Документ собран автоматически из файлов репозитория (`tools/build_deliverable.py`).
