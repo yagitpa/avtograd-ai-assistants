@@ -796,6 +796,32 @@ def safe_answer(role: str, history: list[dict], **kwargs) -> dict:
                       "note": f"{type(exc).__name__}: {exc}"}, role)
 
 
+def trace_pii(stage: str, text: str, vault) -> None:
+    """Показывает работу шлюза персональных данных в журнале процесса.
+
+    Включается переменной `AVTOGRAD_TRACE_PII=1` и по умолчанию молчит:
+    в бою журнал не должен распухать от каждой реплики.
+
+    **Печатается только обезличенный текст и виды подмен — никогда сами
+    значения.** Трассировка, выводящая VIN и телефон, превратила бы журнал
+    процесса в то самое хранилище персональных данных, от которого шлюз и
+    защищает: данные не ушли бы в модель, зато легли бы в лог.
+
+    Сделано ради демонстрации: до этого шлюз работал молча, и показать его
+    работу было нечем — приходилось верить на слово.
+    """
+    if os.environ.get("AVTOGRAD_TRACE_PII", "").strip() not in ("1", "true", "yes"):
+        return
+    kinds: dict[str, int] = {}
+    for placeholder in vault.map:
+        kind = placeholder.strip("{}").rsplit("_", 1)[0]
+        kinds[kind] = kinds.get(kind, 0) + 1
+    shown = " ".join((text or "").split())[:220]
+    summary = ", ".join(f"{k}×{n}" for k, n in sorted(kinds.items())) or "нечего подменять"
+    print(f"[шлюз ПДн] {stage}: «{shown}»")
+    print(f"[шлюз ПДн] подменено: {summary}")
+
+
 def answer(role: str, history: list[dict], now: datetime | None = None,
            owner: str = "bot_owned", stale: bool = False,
            model: str | None = None, extra_context: str = "", cache=None,
@@ -896,6 +922,7 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     if pii:
         blocks = vault.hide(blocks)
         history = [{"role": m["role"], "content": vault.hide(m["content"])} for m in history]
+        trace_pii("в модель уходит", history[-1]["content"] if history else "", vault)
 
     messages = [{"role": "system", "content": system_prompt(role)},
                 {"role": "system", "content": blocks}] + history
@@ -942,6 +969,7 @@ def answer(role: str, history: list[dict], now: datetime | None = None,
     # Валидатор работает уже по развёрнутому тексту — по тому самому, который
     # уйдёт человеку.
     if pii:
+        trace_pii("из модели вернулось", text, vault)
         text = vault.show(text)
         broken = vault.leftovers(text)
         if broken:
